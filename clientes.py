@@ -41,12 +41,14 @@ st.markdown("""
     <style>
         .goog-te-banner-frame { display: none !important; }
         .notranslate { transform: translateZ(0); }
+        /* Estilo para la imagen que asegura que se vea bien en celular */
         div[data-testid="stImage"] img { 
-            border-radius: 10px; 
-            max-height: 250px; 
+            border-radius: 12px; 
+            max-height: 280px; 
             object-fit: contain; 
             margin: auto;
             display: block;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -64,7 +66,7 @@ try:
 except:
     supabase = None
 
-# --- 3. LÓGICA DE TEMAS VISUALES (COMPLETA) ---
+# --- 3. TEMAS VISUALES ---
 try: tz_cdmx = pytz.timezone('America/Mexico_City')
 except: tz_cdmx = None
 
@@ -73,172 +75,81 @@ def obtener_hora_mx():
 
 def get_theme_by_time(date):
     h = date.hour
-    
-    # 🌅 MAÑANA (6 AM - 12 PM)
-    if 6 <= h < 12:
-        return {
-            "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
-            "card_bg": "rgba(255, 255, 255, 0.95)",
-            "text_color": "#000000",
-            "text_shadow": "none",
-            "accent_color": "#eb0a1e",
-            "footer_border": "#000000"
-        }
-    
-    # ☀️ TARDE (12 PM - 7 PM)
+    if 6 <= h < 12: 
+        return {"css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)", "card_bg": "rgba(255, 255, 255, 0.95)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
     elif 12 <= h < 19:
-        return {
-            "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
-            "card_bg": "rgba(255, 255, 255, 1)",
-            "text_color": "#000000",
-            "text_shadow": "none",
-            "accent_color": "#eb0a1e",
-            "footer_border": "#000000"
-        }
-    
-    # 🌌 NOCHE (7 PM - 6 AM)
+        return {"css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)", "card_bg": "rgba(255, 255, 255, 1)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
     else:
-        return {
-            "css_bg": """
-                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
-                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 3px),
-                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 4px),
-                linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)
-            """,
-            "bg_size": "550px 550px, 350px 350px, 250px 250px, 100% 100%",
-            "bg_pos": "0 0, 40px 60px, 130px 270px, 0 0",
-            "card_bg": "rgba(0, 0, 0, 0.9)",
-            "text_color": "#FFFFFF",
-            "text_shadow": "0px 2px 4px #000000",
-            "accent_color": "#ff4d4d",
-            "footer_border": "#FFFFFF"
-        }
+        return {"css_bg": "radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px), linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)", "bg_size": "550px 550px, 100% 100%", "bg_pos": "0 0, 0 0", "card_bg": "rgba(0, 0, 0, 0.9)", "text_color": "#FFFFFF", "text_shadow": "0px 2px 4px #000000", "accent_color": "#ff4d4d", "footer_border": "#FFFFFF"}
 
-def apply_dynamic_styles():
-    now = obtener_hora_mx()
-    theme = get_theme_by_time(now)
-    
-    bg_extra_css = ""
-    if "bg_size" in theme:
-        bg_extra_css = f"background-size: {theme['bg_size']}; background-position: {theme['bg_pos']};"
-    
-    st.markdown(f"""
-        <style>
-        :root {{
-            --text-color: {theme['text_color']};
-            --card-bg: {theme['card_bg']};
-            --accent: {theme['accent_color']};
-        }}
-        .stApp {{
-            background-image: {theme['css_bg']} !important;
-            {bg_extra_css}
-            background-attachment: fixed;
-        }}
-        [data-testid="stBlockContainer"] {{
-            background-color: var(--card-bg) !important;
-            border-radius: 15px;
-            padding: 2rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            max-width: 700px;
-            margin-top: 20px;
-            border: 1px solid rgba(128,128,128, 0.3);
-        }}
-        h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
-            color: var(--text-color) !important;
-            text-shadow: {theme['text_shadow']} !important;
-            font-family: sans-serif;
-        }}
-        .stTextInput input {{
-            background-color: #ffffff !important;
-            color: #000000 !important;
-            -webkit-text-fill-color: #000000 !important;
-            font-weight: 900 !important;
-            font-size: 24px !important;
-            border: 3px solid var(--accent) !important;
-            text-align: center !important;
-            border-radius: 10px;
-        }}
-        .big-price {{
-            color: var(--accent) !important;
-            font-size: clamp(50px, 15vw, 100px); 
-            font-weight: 900;
-            text-align: center;
-            line-height: 1.1;
-            margin: 10px 0;
-            text-shadow: 2px 2px 0px black !important;
-        }}
-        .stButton button {{
-            background-color: var(--accent) !important;
-            color: white !important;
-            border: 1px solid white;
-            font-weight: bold;
-            font-size: 18px;
-            border-radius: 8px;
-            width: 100%;
-        }}
-        .sku-display {{
-            font-size: 32px !important;
-            font-weight: 900 !important;
-            text-transform: uppercase;
-        }}
-        #MainMenu, footer, header {{visibility: hidden;}}
-        .legal-footer {{
-            border-top: 1px solid {theme['footer_border']} !important;
-            opacity: 0.9;
-            font-size: 11px;
-            margin-top: 40px;
-            padding-top: 20px;
-            text-align: justify;
-        }}
-        div[data-testid="stImage"] {{ display: block; margin: auto; }}
-        </style>
-    """, unsafe_allow_html=True)
+theme = get_theme_by_time(obtener_hora_mx())
+st.markdown(f"""
+    <style>
+    .stApp {{ background-image: {theme['css_bg']} !important; background-attachment: fixed; }}
+    [data-testid="stBlockContainer"] {{ background-color: var(--card-bg); border-radius: 15px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-top: 20px; }}
+    h1, h2, h3, p, div, span {{ color: {theme['text_color']} !important; text-shadow: {theme['text_shadow']}; }}
+    .stTextInput input {{ background-color: white !important; color: black !important; font-size: 24px !important; font-weight: 900 !important; text-align: center !important; border: 3px solid {theme['accent_color']} !important; border-radius: 10px; }}
+    .big-price {{ color: {theme['accent_color']} !important; font-size: 60px; font-weight: 900; text-align: center; margin: 10px 0; text-shadow: 2px 2px 0px black !important; }}
+    .stButton button {{ background-color: {theme['accent_color']} !important; color: white !important; font-weight: bold; font-size: 18px; border-radius: 8px; width: 100%; }}
+    .legal-footer {{ border-top: 1px solid {theme['footer_border']}; font-size: 11px; margin-top: 40px; padding-top: 20px; text-align: justify; opacity: 0.9; }}
+    .sku-display {{ font-size: 32px !important; font-weight: 900 !important; text-transform: uppercase; }}
+    #MainMenu, footer, header {{visibility: hidden;}}
+    </style>
+""", unsafe_allow_html=True)
 
-apply_dynamic_styles()
-fecha_actual = obtener_hora_mx()
-
-# --- 4. FUNCIONES DE BÚSQUEDA Y TRADUCCIÓN ---
+# --- 4. FUNCIONES ---
 
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
     try: return GoogleTranslator(source='auto', target='es').translate(texto)
     except: return texto
 
+# --- MOTOR HÍBRIDO DE BÚSQUEDA DE IMÁGENES ---
 @st.cache_data(ttl=3600, show_spinner=False) 
 def obtener_imagen_remota(sku):
     """
-    Busca imagen en PartSouq (Catálogo Global)
+    Intenta buscar la imagen en múltiples fuentes para evitar bloqueos.
     """
-    url = f"https://partsouq.com/es/search/all?q={sku}"
+    # Simulamos ser un navegador real para que no nos bloqueen
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es-MX,es;q=0.9"
     }
-
+    
+    # 1. INTENTO: ELMHURST TOYOTA (RevolutionParts)
     try:
-        r = requests.get(url, headers=headers, timeout=5)
+        url1 = f"https://parts.elmhursttoyota.com/search?search_str={sku}"
+        r = requests.get(url1, headers=headers, timeout=3)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
+            # Buscamos imagen principal
+            img = soup.find("img", {"class": "product-image"})
+            if not img: img = soup.select_one('.product-item img')
             
-            # Estrategia 1: Tabla de resultados
-            imagenes = soup.select('table.table img')
-            for img in imagenes:
-                src = img.get('src', '')
-                if src and ('/tesseract/' in src or '/assets/' in src):
-                    if 'no-image' not in src:
-                        if src.startswith("//"): return "https:" + src
-                        if src.startswith("/"): return "https://partsouq.com" + src
-                        return src
-                        
-            # Estrategia 2: Página de producto directo
-            main_img = soup.select_one('.f-carousel__slide img')
-            if main_img:
-                src = main_img.get('data-lazy-src') or main_img.get('src')
-                if src:
+            if img:
+                src = img.get('data-src') or img.get('src')
+                if src and ('jpg' in src or 'png' in src) and 'logo' not in src:
+                    if src.startswith("//"): return "https:" + src
+                    if src.startswith("/"): return "https://parts.elmhursttoyota.com" + src
+                    return src
+    except: pass
+    
+    # 2. INTENTO: PARTSOUQ (Respaldo)
+    try:
+        url2 = f"https://partsouq.com/es/search/all?q={sku}"
+        r = requests.get(url2, headers=headers, timeout=4)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            imgs = soup.select('table.table img')
+            for i in imgs:
+                src = i.get('src', '')
+                if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
                     if src.startswith("//"): return "https:" + src
                     if src.startswith("/"): return "https://partsouq.com" + src
                     return src
     except: pass
+
     return None
 
 def buscar_producto_supabase(sku_usuario):
@@ -253,12 +164,9 @@ def buscar_producto_supabase(sku_usuario):
     except: pass
     return None
 
-# --- 5. INTERFAZ: ENCABEZADO REAJUSTADO (Fecha Arriba de Logo) ---
-# Usamos columnas centrales para alinear todo bonito
-col_izq, col_centro, col_der = st.columns([1, 2, 1])
-
-with col_centro:
-    # 1. Fecha y Hora (ARRIBA)
+# --- 5. INTERFAZ ---
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
     st.markdown(f"""
     <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 5px;">
         LOS FUERTES<br>
@@ -266,7 +174,6 @@ with col_centro:
     </div>
     """, unsafe_allow_html=True)
     
-    # 2. Logo (ABAJO)
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True) 
     else:
@@ -300,13 +207,13 @@ if busqueda or btn:
             try: final = float(precio) * 1.16
             except: final = 0.0
             
-            # Imagen
+            # --- IMAGEN ---
             if url_imagen:
-                st.image(url_imagen, caption="Referencia Catálogo (PartSouq)", use_container_width=True)
+                st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
             else:
-                st.caption("📷 Imagen no disponible digitalmente.")
+                # Opcional: Puedes quitar este 'else' si prefieres que no salga nada si no hay foto
+                st.info("📷 Imagen no disponible digitalmente.")
 
-            # Datos
             st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
             st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
             
@@ -318,7 +225,7 @@ if busqueda or btn:
         else:
             st.error("❌ CÓDIGO NO ENCONTRADO")
 
-# --- 7. FOOTER LEGAL RESTAURADO ---
+# --- 7. FOOTER LEGAL ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
@@ -329,6 +236,6 @@ st.markdown(f"""
     <br><br>
     <strong>2. VIGENCIA Y EXACTITUD (NOM-174-SCFI-2007):</strong> El precio mostrado es válido exclusivamente al momento de la consulta (Timbre digital: <strong>{fecha_actual.strftime("%d/%m/%Y %H:%M:%S")}</strong>). Toyota Los Fuertes garantiza el respeto al precio exhibido al momento de la transacción conforme a lo dispuesto en las Normas Oficiales Mexicanas sobre prácticas comerciales en transacciones electrónicas y de información.
     <br><br>
-    <strong>3. INFORMACIÓN COMERCIAL (NOM-050-SCFI-2004):</strong> La descripción y especificaciones de las partes cumplen con los requisitos de información comercial general para productos destinados a consumidores en el territorio nacional. Las imágenes mostradas son ilustrativas y provienen de catálogos internacionales (PartSouq), pueden diferir del producto real.
+    <strong>3. INFORMACIÓN COMERCIAL (NOM-050-SCFI-2004):</strong> La descripción y especificaciones de las partes cumplen con los requisitos de información comercial general para productos destinados a consumidores en el territorio nacional. Las imágenes mostradas son ilustrativas y provienen de catálogos internacionales (PartSouq / Elmhurst), pueden diferir del producto real.
 </div>
 """, unsafe_allow_html=True)
