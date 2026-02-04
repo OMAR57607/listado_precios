@@ -1,38 +1,30 @@
 import streamlit as st
 import pandas as pd
 import os
+# import zipfile  <-- Ya no lo necesitamos porque usamos Supabase
 from datetime import datetime
+# Librería para la traducción automática (NOM-050)
 from deep_translator import GoogleTranslator
 import pytz
 import sentry_sdk
 from supabase import create_client, Client
 
-# --- 1. FUNCIÓN DE SEGURIDAD HÍBRIDA ---
+# --- 1. CONFIGURACIÓN DE SECRETOS Y SENTRY (HÍBRIDO) ---
 def get_secret(key):
-    # 1. Busca en Railway (Variables del sistema)
+    # Primero busca en Railway (Variables de Entorno)
     val = os.environ.get(key)
-    if val:
-        return val
-    # 2. Busca en Local (secrets.toml)
+    if val: return val
+    # Si no, busca en local (.streamlit/secrets.toml)
     try:
-        if key in st.secrets:
-            return st.secrets[key]
-    except:
-        pass
+        if key in st.secrets: return st.secrets[key]
+    except: pass
     return None
 
-# --- 2. CONFIGURACIÓN DE SENTRY ---
 sentry_dsn = get_secret("SENTRY_DSN")
-
 if sentry_dsn:
     try:
-        sentry_sdk.init(
-            dsn=sentry_dsn,
-            traces_sample_rate=1.0,
-            profiles_sample_rate=1.0,
-        )
-    except:
-        pass
+        sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=1.0, profiles_sample_rate=1.0)
+    except: pass
 
 # Configuración de página
 st.set_page_config(
@@ -41,24 +33,21 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- 3. CONEXIÓN A SUPABASE ---
+# --- 2. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
     url = get_secret("SUPABASE_URL")
     key = get_secret("SUPABASE_KEY")
-    
-    if not url or not key:
-        return None
-        
+    if not url or not key: return None
     return create_client(url, key)
 
 try:
     supabase = init_supabase()
 except Exception as e:
-    st.error(f"Error conectando a la base de datos: {e}")
+    # st.error(f"Error: {e}") # Opcional: comentar para producción
     supabase = None
 
-# --- 4. TEMAS VISUALES ---
+# --- 3. LÓGICA DE TEMAS VISUALES (TU CÓDIGO ORIGINAL RESTAURADO) ---
 try:
     tz_cdmx = pytz.timezone('America/Mexico_City')
 except:
@@ -71,60 +60,145 @@ def obtener_hora_mx():
 
 def get_theme_by_time(date):
     h = date.hour
-    if 6 <= h < 12: # Mañana
+    
+    # 🌅 MAÑANA (6 AM - 12 PM): Amanecer Limpio
+    if 6 <= h < 12:
         return {
-            "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
+            "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)", # Azul muy pálido a blanco
             "card_bg": "rgba(255, 255, 255, 0.95)",
             "text_color": "#000000",
             "text_shadow": "none",
             "accent_color": "#eb0a1e",
             "footer_border": "#000000"
         }
-    elif 12 <= h < 19: # Tarde
+    
+    # ☀️ TARDE (12 PM - 7 PM): Día Soleado (Alto Contraste)
+    elif 12 <= h < 19:
         return {
-            "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
-            "card_bg": "rgba(255, 255, 255, 1)",
-            "text_color": "#000000",
+            "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)", # Azul cielo sólido
+            "card_bg": "rgba(255, 255, 255, 1)", # Blanco total
+            "text_color": "#000000", # Negro puro
             "text_shadow": "none",
             "accent_color": "#eb0a1e",
             "footer_border": "#000000"
         }
-    else: # Noche
+    
+    # 🌌 NOCHE (7 PM - 6 AM): Cielo Estrellado "Natural" (CSS Puro)
+    else:
         return {
+            # Técnica de Gradientes Radiales para simular estrellas sin imágenes
             "css_bg": """
                 radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
                 radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 3px),
                 radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 4px),
                 linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)
             """,
-            "bg_size": "550px 550px, 350px 350px, 250px 250px, 100% 100%",
-            "bg_pos": "0 0, 40px 60px, 130px 270px, 0 0",
-            "card_bg": "rgba(0, 0, 0, 0.9)",
-            "text_color": "#FFFFFF",
-            "text_shadow": "0px 2px 4px #000000",
-            "accent_color": "#ff4d4d",
+            "bg_size": "550px 550px, 350px 350px, 250px 250px, 100% 100%", # Capas de estrellas
+            "bg_pos": "0 0, 40px 60px, 130px 270px, 0 0", # Posiciones para que se vea natural
+            "card_bg": "rgba(0, 0, 0, 0.9)", # Fondo negro casi sólido
+            "text_color": "#FFFFFF", # Blanco puro
+            "text_shadow": "0px 2px 4px #000000", # Sombra para resaltar
+            "accent_color": "#ff4d4d", # Rojo brillante
             "footer_border": "#FFFFFF"
         }
 
 def apply_dynamic_styles():
     now = obtener_hora_mx()
     theme = get_theme_by_time(now)
+    
+    # Ajustes CSS condicionales para el fondo complejo de noche
     bg_extra_css = ""
     if "bg_size" in theme:
         bg_extra_css = f"background-size: {theme['bg_size']}; background-position: {theme['bg_pos']};"
     
     st.markdown(f"""
         <style>
-        :root {{ --text-color: {theme['text_color']}; --card-bg: {theme['card_bg']}; --accent: {theme['accent_color']}; }}
-        .stApp {{ background-image: {theme['css_bg']} !important; {bg_extra_css} background-attachment: fixed; }}
-        [data-testid="stBlockContainer"] {{ background-color: var(--card-bg) !important; border-radius: 15px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 700px; margin-top: 20px; border: 1px solid rgba(128,128,128, 0.3); }}
-        h1, h2, h3, h4, h5, h6, p, div, span, label, li {{ color: var(--text-color) !important; text-shadow: {theme['text_shadow']} !important; font-family: sans-serif; }}
-        .stTextInput input {{ background-color: #ffffff !important; color: #000000 !important; -webkit-text-fill-color: #000000 !important; font-weight: 900 !important; font-size: 24px !important; border: 3px solid var(--accent) !important; text-align: center !important; border-radius: 10px; }}
-        .big-price {{ color: var(--accent) !important; font-size: clamp(50px, 15vw, 100px); font-weight: 900; text-align: center; line-height: 1.1; margin: 10px 0; text-shadow: 2px 2px 0px black !important; }}
-        .stButton button {{ background-color: var(--accent) !important; color: white !important; border: 1px solid white; font-weight: bold; font-size: 18px; border-radius: 8px; width: 100%; }}
-        .sku-display {{ font-size: 32px !important; font-weight: 900 !important; text-transform: uppercase; }}
+        /* --- VARIABLES --- */
+        :root {{
+            --text-color: {theme['text_color']};
+            --card-bg: {theme['card_bg']};
+            --accent: {theme['accent_color']};
+        }}
+
+        /* 1. FONDO DE PANTALLA (Natural) */
+        .stApp {{
+            background-image: {theme['css_bg']} !important;
+            {bg_extra_css}
+            background-attachment: fixed;
+        }}
+        
+        /* 2. TARJETA CENTRAL */
+        [data-testid="stBlockContainer"] {{
+            background-color: var(--card-bg) !important;
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            max-width: 700px;
+            margin-top: 20px;
+            border: 1px solid rgba(128,128,128, 0.3);
+        }}
+
+        /* 3. TEXTOS (Alto Contraste Forzado) */
+        h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
+            color: var(--text-color) !important;
+            text-shadow: {theme['text_shadow']} !important;
+            font-family: sans-serif;
+        }}
+        
+        /* 4. INPUT (Blanco con letras Negras SIEMPRE) */
+        .stTextInput input {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+            font-weight: 900 !important;
+            font-size: 24px !important;
+            border: 3px solid var(--accent) !important;
+            text-align: center !important;
+            border-radius: 10px;
+        }}
+        
+        /* 5. PRECIO */
+        .big-price {{
+            color: var(--accent) !important;
+            font-size: clamp(50px, 15vw, 100px); 
+            font-weight: 900;
+            text-align: center;
+            line-height: 1.1;
+            margin: 10px 0;
+            text-shadow: 2px 2px 0px black !important;
+        }}
+
+        /* 6. BOTÓN */
+        .stButton button {{
+            background-color: var(--accent) !important;
+            color: white !important;
+            border: 1px solid white;
+            font-weight: bold;
+            font-size: 18px;
+            border-radius: 8px;
+            width: 100%;
+        }}
+        
+        /* 7. TEXTOS GRANDES */
+        .sku-display {{
+            font-size: 32px !important;
+            font-weight: 900 !important;
+            text-transform: uppercase;
+        }}
+        
+        /* 8. KIOSCO */
         #MainMenu, footer, header {{visibility: hidden;}}
-        .legal-footer {{ border-top: 1px solid {theme['footer_border']} !important; opacity: 0.9; font-size: 11px; margin-top: 40px; padding-top: 20px; text-align: justify; }}
+        
+        /* 9. FOOTER LEGAL (Línea divisora adaptable) */
+        .legal-footer {{
+            border-top: 1px solid {theme['footer_border']} !important;
+            opacity: 0.9;
+            font-size: 11px;
+            margin-top: 40px;
+            padding-top: 20px;
+            text-align: justify;
+        }}
+        
         div[data-testid="stImage"] {{ display: block; margin: auto; }}
         </style>
     """, unsafe_allow_html=True)
@@ -132,31 +206,46 @@ def apply_dynamic_styles():
 apply_dynamic_styles()
 fecha_actual = obtener_hora_mx()
 
-# --- 5. FUNCIÓN DE BÚSQUEDA ---
+# --- 4. FUNCIÓN DE BÚSQUEDA EN SUPABASE (LÓGICA ACTUALIZADA) ---
 def buscar_producto_supabase(sku_usuario):
+    """
+    Busca en Supabase usando las columnas: 'item' y 'catalogo_toyota'
+    Incluye limpieza de guiones y búsqueda flexible.
+    """
     if not supabase:
         return None
-    
-    # Limpiamos el SKU ingresado para quitar guiones y espacios
-    sku_clean = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
+
+    # Limpieza: quitamos guiones y espacios, todo a mayúsculas
+    sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
     
     try:
-        # AQUÍ ESTÁ EL CAMBIO: Usamos 'catalogo_toyota'
-        # IMPORTANTE: Supabase busca en la columna 'sku_clean'
+        # Intento 1: Búsqueda flexible (ilike) sobre la columna 'item' usando el SKU limpio
+        # Esto encuentra "90915YZZD1" incluso si en la DB está así y el usuario pone guiones
         response = supabase.table('catalogo_toyota') \
             .select("*") \
-            .eq('sku_clean', sku_clean) \
+            .ilike('item', sku_limpio) \
             .execute()
             
         if response.data and len(response.data) > 0:
             return response.data[0]
+            
+        # Intento 2: Por si acaso en tu DB el 'item' SÍ tiene guiones (ej. '90915-YZZD1')
+        if '-' in sku_usuario:
+             response2 = supabase.table('catalogo_toyota') \
+                .select("*") \
+                .ilike('item', sku_usuario.strip().upper()) \
+                .execute()
+             if response2.data and len(response2.data) > 0:
+                 return response2.data[0]
+
         return None
     except Exception as e:
         if sentry_dsn: sentry_sdk.capture_exception(e)
-        st.error(f"Error consultando DB: {e}")
+        st.error(f"Error técnico consultando DB: {e}")
         return None
 
-# --- 6. INTERFAZ ---
+
+# --- 5. INTERFAZ (RESTO DEL CÓDIGO ORIGINAL) ---
 col_vacia, col_logo, col_fecha = st.columns([1, 2, 1])
 with col_logo:
     if os.path.exists("logo.png"):
@@ -174,6 +263,8 @@ with col_fecha:
     """, unsafe_allow_html=True)
 
 st.markdown("---")
+
+# --- 6. BUSCADOR ---
 st.markdown("<h3 style='text-align: center; font-weight: 800;'>VERIFICADOR DE PRECIOS</h3>", unsafe_allow_html=True)
 
 busqueda_input = st.text_input("Ingresa SKU:", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed").strip()
@@ -182,28 +273,35 @@ boton_consultar = st.button("🔍 CONSULTAR PRECIO")
 # --- 7. RESULTADOS ---
 if (busqueda_input or boton_consultar):
     if not supabase:
-        st.error("❌ Error: No hay conexión a la base de datos.")
+        st.error("❌ Error de conexión: No se pudo conectar a Supabase.")
     else:
-        with st.spinner('Buscando...'):
+        with st.spinner('Consultando sistema...'):
             producto = buscar_producto_supabase(busqueda_input)
 
         if producto:
-            # MAPEO DE COLUMNAS 
-            # Si en tu Excel la columna del SKU se llama diferente (ej: 'Material'), cambia 'sku' por 'Material'
-            sku_val = producto.get('sku', busqueda_input) 
-            desc_original = producto.get('descripcion', 'Descripción no disponible')
-            precio_base = producto.get('precio', 0)
+            # MAPEO DE COLUMNAS CORRECTO (SEGÚN TU BASE DE DATOS)
+            # 'item' = SKU
+            # 'descripcion' = Descripción
+            # 'total_unitario' = Precio
             
+            sku_val = producto.get('item', busqueda_input)
+            desc_original = producto.get('descripcion', 'Sin descripción')
+            precio_db = producto.get('total_unitario', 0)
+            
+            # Traducción
             try:
                 desc_es = GoogleTranslator(source='auto', target='es').translate(desc_original)
             except:
                 desc_es = desc_original
 
+            # Cálculo de IVA (Asumiendo que 'total_unitario' es el precio base)
+            # Si en tu DB el precio YA TIENE IVA, elimina el "* 1.16"
             try:
-                precio_final = float(precio_base) * 1.16 
+                precio_final = float(precio_db) * 1.16
             except:
                 precio_final = 0.0
 
+            # Visualización (Usa tus clases CSS originales)
             st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 20px;'>{sku_val}</div>", unsafe_allow_html=True)
             st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
             
@@ -211,11 +309,12 @@ if (busqueda_input or boton_consultar):
                 st.markdown(f"<div class='big-price'>${precio_final:,.2f}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='text-align: center; font-size: 14px; font-weight: bold; margin-top: 5px;'>Precio por Unidad. Neto (Incluye IVA). Moneda Nacional.</div>", unsafe_allow_html=True)
             else:
-                st.warning("Precio no disponible.")
+                st.warning("Precio no disponible al público.")
+                
         else:
             st.error("❌ CÓDIGO NO ENCONTRADO")
 
-# --- 8. FOOTER LEGAL ---
+# --- 8. FOOTER LEGAL ROBUSTO (TU CÓDIGO ORIGINAL RESTAURADO) ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
