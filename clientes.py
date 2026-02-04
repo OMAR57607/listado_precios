@@ -10,7 +10,7 @@ import pytz
 import sentry_sdk
 from supabase import create_client, Client
 
-# --- 1. CONFIGURACIÓN DE SECRETOS Y SENTRY ---
+# --- 1. CONFIGURACIÓN INICIAL Y FECHA (CRÍTICO: ESTO VA PRIMERO) ---
 def get_secret(key):
     val = os.environ.get(key)
     if val: return val
@@ -31,7 +31,16 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- 1.5 FIX NUCLEAR PARA MÓVILES (CRÍTICO) ---
+# Definimos la hora inmediatamente para evitar NameError
+try: tz_cdmx = pytz.timezone('America/Mexico_City')
+except: tz_cdmx = None
+
+def obtener_hora_mx():
+    return datetime.now(tz_cdmx) if tz_cdmx else datetime.now()
+
+fecha_actual = obtener_hora_mx() # <--- AQUI SE CALCULA ANTES DE USARSE
+
+# --- 2. FIX NUCLEAR PARA MÓVILES ---
 st.markdown("""
     <script>
         document.documentElement.lang = 'es';
@@ -41,7 +50,6 @@ st.markdown("""
     <style>
         .goog-te-banner-frame { display: none !important; }
         .notranslate { transform: translateZ(0); }
-        /* Estilo para la imagen que asegura que se vea bien en celular */
         div[data-testid="stImage"] img { 
             border-radius: 12px; 
             max-height: 280px; 
@@ -50,10 +58,12 @@ st.markdown("""
             display: block;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
+        .sku-display { font-size: 32px !important; font-weight: 900 !important; text-transform: uppercase; }
+        #MainMenu, footer, header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONEXIÓN SUPABASE ---
+# --- 3. CONEXIÓN SUPABASE ---
 @st.cache_resource
 def init_supabase():
     url = get_secret("SUPABASE_URL")
@@ -66,187 +76,62 @@ try:
 except:
     supabase = None
 
-# --- 3. LÓGICA DE TEMAS VISUALES (RESTAURADA COMPLETA) ---
-try: tz_cdmx = pytz.timezone('America/Mexico_City')
-except: tz_cdmx = None
-
-def obtener_hora_mx():
-    return datetime.now(tz_cdmx) if tz_cdmx else datetime.now()
-
+# --- 4. TEMAS VISUALES ---
 def get_theme_by_time(date):
     h = date.hour
-    
-    # 🌅 MAÑANA (6 AM - 12 PM)
+    # 🌅 MAÑANA
     if 6 <= h < 12:
-        return {
-            "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
-            "card_bg": "rgba(255, 255, 255, 0.95)",
-            "text_color": "#000000",
-            "text_shadow": "none",
-            "accent_color": "#eb0a1e",
-            "footer_border": "#000000"
-        }
-    
-    # ☀️ TARDE (12 PM - 7 PM)
+        return {"css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)", "card_bg": "rgba(255, 255, 255, 0.95)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
+    # ☀️ TARDE
     elif 12 <= h < 19:
-        return {
-            "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
-            "card_bg": "rgba(255, 255, 255, 1)",
-            "text_color": "#000000",
-            "text_shadow": "none",
-            "accent_color": "#eb0a1e",
-            "footer_border": "#000000"
-        }
-    
-    # 🌌 NOCHE (7 PM - 6 AM)
+        return {"css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)", "card_bg": "rgba(255, 255, 255, 1)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
+    # 🌌 NOCHE
     else:
-        return {
-            "css_bg": """
-                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
-                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 3px),
-                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 4px),
-                linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)
-            """,
-            "bg_size": "550px 550px, 350px 350px, 250px 250px, 100% 100%",
-            "bg_pos": "0 0, 40px 60px, 130px 270px, 0 0",
-            "card_bg": "rgba(0, 0, 0, 0.9)",
-            "text_color": "#FFFFFF",
-            "text_shadow": "0px 2px 4px #000000",
-            "accent_color": "#ff4d4d",
-            "footer_border": "#FFFFFF"
-        }
+        return {"css_bg": "radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px), linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)", "bg_size": "550px 550px, 100% 100%", "bg_pos": "0 0, 0 0", "card_bg": "rgba(0, 0, 0, 0.9)", "text_color": "#FFFFFF", "text_shadow": "0px 2px 4px #000000", "accent_color": "#ff4d4d", "footer_border": "#FFFFFF"}
 
 def apply_dynamic_styles():
-    now = obtener_hora_mx()
-    theme = get_theme_by_time(now)
-    
-    bg_extra_css = ""
-    if "bg_size" in theme:
-        bg_extra_css = f"background-size: {theme['bg_size']}; background-position: {theme['bg_pos']};"
+    theme = get_theme_by_time(fecha_actual)
+    bg_extra_css = f"background-size: {theme.get('bg_size', 'auto')}; background-position: {theme.get('bg_pos', 'center')};" if "bg_size" in theme else ""
     
     st.markdown(f"""
         <style>
-        /* --- VARIABLES --- */
-        :root {{
-            --text-color: {theme['text_color']};
-            --card-bg: {theme['card_bg']};
-            --accent: {theme['accent_color']};
-        }}
-
-        /* 1. FONDO DE PANTALLA */
-        .stApp {{
-            background-image: {theme['css_bg']} !important;
-            {bg_extra_css}
-            background-attachment: fixed;
-        }}
-        
-        /* 2. TARJETA CENTRAL */
-        [data-testid="stBlockContainer"] {{
-            background-color: var(--card-bg) !important;
-            border-radius: 15px;
-            padding: 2rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            max-width: 700px;
-            margin-top: 20px;
-            border: 1px solid rgba(128,128,128, 0.3);
-        }}
-
-        /* 3. TEXTOS */
-        h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
-            color: var(--text-color) !important;
-            text-shadow: {theme['text_shadow']} !important;
-            font-family: sans-serif;
-        }}
-        
-        /* 4. INPUT */
-        .stTextInput input {{
-            background-color: #ffffff !important;
-            color: #000000 !important;
-            -webkit-text-fill-color: #000000 !important;
-            font-weight: 900 !important;
-            font-size: 24px !important;
-            border: 3px solid var(--accent) !important;
-            text-align: center !important;
-            border-radius: 10px;
-        }}
-        
-        /* 5. PRECIO */
-        .big-price {{
-            color: var(--accent) !important;
-            font-size: clamp(50px, 15vw, 100px); 
-            font-weight: 900;
-            text-align: center;
-            line-height: 1.1;
-            margin: 10px 0;
-            text-shadow: 2px 2px 0px black !important;
-        }}
-
-        /* 6. BOTÓN */
-        .stButton button {{
-            background-color: var(--accent) !important;
-            color: white !important;
-            border: 1px solid white;
-            font-weight: bold;
-            font-size: 18px;
-            border-radius: 8px;
-            width: 100%;
-        }}
-        
-        /* 7. SKU DISPLAY */
-        .sku-display {{
-            font-size: 32px !important;
-            font-weight: 900 !important;
-            text-transform: uppercase;
-        }}
-        
-        /* 8. KIOSCO */
-        #MainMenu, footer, header {{visibility: hidden;}}
-        
-        /* 9. FOOTER LEGAL */
-        .legal-footer {{
-            border-top: 1px solid {theme['footer_border']} !important;
-            opacity: 0.9;
-            font-size: 11px;
-            margin-top: 40px;
-            padding-top: 20px;
-            text-align: justify;
-        }}
+        :root {{ --text-color: {theme['text_color']}; --card-bg: {theme['card_bg']}; --accent: {theme['accent_color']}; }}
+        .stApp {{ background-image: {theme['css_bg']} !important; {bg_extra_css} background-attachment: fixed; }}
+        [data-testid="stBlockContainer"] {{ background-color: var(--card-bg); border-radius: 15px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-top: 20px; }}
+        h1, h2, h3, p, div, span {{ color: {theme['text_color']} !important; text-shadow: {theme['text_shadow']}; }}
+        .stTextInput input {{ background-color: white !important; color: black !important; font-size: 24px !important; font-weight: 900 !important; text-align: center !important; border: 3px solid {theme['accent_color']} !important; border-radius: 10px; }}
+        .big-price {{ color: {theme['accent_color']} !important; font-size: 60px; font-weight: 900; text-align: center; margin: 10px 0; text-shadow: 2px 2px 0px black !important; }}
+        .stButton button {{ background-color: {theme['accent_color']} !important; color: white !important; font-weight: bold; font-size: 18px; border-radius: 8px; width: 100%; }}
+        .legal-footer {{ border-top: 1px solid {theme['footer_border']}; font-size: 11px; margin-top: 40px; padding-top: 20px; text-align: justify; opacity: 0.9; }}
         </style>
     """, unsafe_allow_html=True)
 
 apply_dynamic_styles()
-fecha_actual = obtener_hora_mx()
 
-# --- 4. FUNCIONES ---
+# --- 5. FUNCIONES AUXILIARES ---
 
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
     try: return GoogleTranslator(source='auto', target='es').translate(texto)
     except: return texto
 
-# --- MOTOR HÍBRIDO DE BÚSQUEDA DE IMÁGENES ---
 @st.cache_data(ttl=3600, show_spinner=False) 
 def obtener_imagen_remota(sku):
-    """
-    Intenta buscar la imagen en múltiples fuentes para evitar bloqueos.
-    """
-    # Simulamos ser un navegador real para que no nos bloqueen
+    """ MOTOR HÍBRIDO: Busca en Elmhurst y luego en PartSouq """
     headers = {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "es-MX,es;q=0.9"
     }
     
-    # 1. INTENTO: ELMHURST TOYOTA (RevolutionParts)
+    # 1. ELMHURST
     try:
         url1 = f"https://parts.elmhursttoyota.com/search?search_str={sku}"
         r = requests.get(url1, headers=headers, timeout=3)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
-            # Buscamos imagen principal
             img = soup.find("img", {"class": "product-image"})
             if not img: img = soup.select_one('.product-item img')
-            
             if img:
                 src = img.get('data-src') or img.get('src')
                 if src and ('jpg' in src or 'png' in src) and 'logo' not in src:
@@ -255,7 +140,7 @@ def obtener_imagen_remota(sku):
                     return src
     except: pass
     
-    # 2. INTENTO: PARTSOUQ (Respaldo)
+    # 2. PARTSOUQ
     try:
         url2 = f"https://partsouq.com/es/search/all?q={sku}"
         r = requests.get(url2, headers=headers, timeout=4)
@@ -269,7 +154,6 @@ def obtener_imagen_remota(sku):
                     if src.startswith("/"): return "https://partsouq.com" + src
                     return src
     except: pass
-
     return None
 
 def buscar_producto_supabase(sku_usuario):
@@ -284,10 +168,10 @@ def buscar_producto_supabase(sku_usuario):
     except: pass
     return None
 
-# --- 5. INTERFAZ ---
+# --- 6. INTERFAZ ---
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    # FECHA ARRIBA
+    # FECHA ARRIBA DEL LOGO
     st.markdown(f"""
     <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 5px;">
         LOS FUERTES<br>
@@ -295,7 +179,6 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
     
-    # LOGO ABAJO
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True) 
     else:
@@ -307,7 +190,7 @@ st.markdown("<h3 style='text-align: center; font-weight: 800;'>VERIFICADOR DE PR
 busqueda = st.text_input("Ingresa SKU:", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed").strip()
 btn = st.button("🔍 CONSULTAR PRECIO")
 
-# --- 6. RESULTADOS ---
+# --- 7. LÓGICA DE RESULTADOS ---
 if busqueda or btn:
     if not supabase:
         st.error("❌ Sin conexión.")
@@ -329,12 +212,13 @@ if busqueda or btn:
             try: final = float(precio) * 1.16
             except: final = 0.0
             
-            # --- IMAGEN ---
+            # IMAGEN
             if url_imagen:
                 st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
             else:
                 st.info("📷 Imagen no disponible digitalmente.")
 
+            # DATOS
             st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
             st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
             
@@ -346,7 +230,7 @@ if busqueda or btn:
         else:
             st.error("❌ CÓDIGO NO ENCONTRADO")
 
-# --- 7. FOOTER LEGAL RESTAURADO ---
+# --- 8. FOOTER LEGAL ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
