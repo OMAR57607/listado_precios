@@ -1,20 +1,44 @@
 import streamlit as st
 import pandas as pd
+import os
 from datetime import datetime
 from deep_translator import GoogleTranslator
 import pytz
 import sentry_sdk
-import os
 from supabase import create_client, Client
 
-# --- 1. CONFIGURACIÓN DE SENTRY (Monitoreo de Errores) ---
-# Esto debe ir antes de cualquier otra cosa
-if "SENTRY_DSN" in st.secrets:
-    sentry_sdk.init(
-        dsn=st.secrets["SENTRY_DSN"],
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
+# --- 1. FUNCIÓN DE SEGURIDAD HÍBRIDA (RAILWAY + LOCAL) ---
+def get_secret(key):
+    """
+    Busca la clave secreta primero en las Variables de Entorno (Railway),
+    y si no está, la busca en los secretos locales de Streamlit.
+    """
+    # 1. Intenta leer desde las variables del sistema (Railway)
+    val = os.environ.get(key)
+    if val:
+        return val
+        
+    # 2. Si no existe, intenta leer desde secrets.toml (Local)
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except:
+        pass
+        
+    return None
+
+# --- 2. CONFIGURACIÓN DE SENTRY ---
+sentry_dsn = get_secret("SENTRY_DSN")
+
+if sentry_dsn:
+    try:
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=1.0,
+            profiles_sample_rate=1.0,
+        )
+    except Exception as e:
+        print(f"Advertencia Sentry: {e}")
 
 # Configuración de página
 st.set_page_config(
@@ -23,21 +47,27 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- 2. CONEXIÓN A SUPABASE ---
-# Usamos st.cache_resource para mantener la conexión abierta
+# --- 3. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
+    # USAMOS LA FUNCIÓN get_secret, NO st.secrets DIRECTAMENTE
+    url = get_secret("SUPABASE_URL")
+    key = get_secret("SUPABASE_KEY")
+    
+    if not url or not key:
+        return None
+        
     return create_client(url, key)
 
 try:
     supabase = init_supabase()
+    if not supabase:
+        st.error("❌ Error de configuración: No se encontraron las credenciales SUPABASE_URL o SUPABASE_KEY en las variables de Railway.")
 except Exception as e:
     st.error(f"Error conectando a la base de datos: {e}")
     supabase = None
 
-# --- 3. LÓGICA DE TEMAS VISUALES (Tu código original) ---
+# --- 4. LÓGICA DE TEMAS VISUALES ---
 try:
     tz_cdmx = pytz.timezone('America/Mexico_City')
 except:
@@ -114,40 +144,27 @@ def apply_dynamic_styles():
 apply_dynamic_styles()
 fecha_actual = obtener_hora_mx()
 
-# --- 4. FUNCIÓN DE BÚSQUEDA EN SUPABASE ---
+# --- 5. FUNCIÓN DE BÚSQUEDA ---
 def buscar_producto_supabase(sku_usuario):
-    """
-    Busca un SKU en Supabase.
-    Asume que tienes una tabla llamada 'lista_precios' con columnas:
-    - 'sku' (o 'numero_parte')
-    - 'descripcion'
-    - 'precio'
-    """
     if not supabase:
         return None
-
-    # Limpiamos el input del usuario igual que antes
     sku_clean = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
-    
     try:
-        # Hacemos la consulta a Supabase
-        # IMPORTANTE: Cambia 'lista_precios' por el nombre real de tu tabla en Supabase
-        # Y asegúrate de que la columna donde buscas se llama 'sku_clean' o similar
+        # Asegúrate de que 'lista_precios' sea el nombre real de tu tabla
         response = supabase.table('lista_precios') \
             .select("*") \
             .eq('sku_clean', sku_clean) \
             .execute()
-            
         if response.data and len(response.data) > 0:
-            return response.data[0] # Retorna el primer resultado
+            return response.data[0]
         return None
     except Exception as e:
+        # Captura silenciosa para Sentry
+        if sentry_dsn: sentry_sdk.capture_exception(e)
         st.error(f"Error consultando DB: {e}")
-        # Enviamos el error a Sentry silenciosamente
-        sentry_sdk.capture_exception(e)
         return None
 
-# --- 5. INTERFAZ ---
+# --- 6. INTERFAZ ---
 col_vacia, col_logo, col_fecha = st.columns([1, 2, 1])
 with col_logo:
     if os.path.exists("logo.png"):
@@ -170,32 +187,27 @@ st.markdown("<h3 style='text-align: center; font-weight: 800;'>VERIFICADOR DE PR
 busqueda_input = st.text_input("Ingresa SKU:", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed").strip()
 boton_consultar = st.button("🔍 CONSULTAR PRECIO")
 
-# --- 6. LÓGICA DE RESULTADOS ---
+# --- 7. RESULTADOS ---
 if (busqueda_input or boton_consultar):
     with st.spinner('Buscando en la nube...'):
         producto = buscar_producto_supabase(busqueda_input)
 
     if producto:
-        # Mapeo de columnas (AJUSTA ESTOS NOMBRES SEGÚN TU TABLA EN SUPABASE)
-        # Si en tu tabla se llaman diferente, cámbialo aquí abajo:
+        # MAPEO DE COLUMNAS (Ajusta si tus columnas en Supabase se llaman diferente)
         sku_val = producto.get('sku', busqueda_input) 
         desc_original = producto.get('descripcion', 'Sin descripción')
         precio_base = producto.get('precio', 0)
         
-        # Traducción
         try:
             desc_es = GoogleTranslator(source='auto', target='es').translate(desc_original)
         except:
             desc_es = desc_original
 
-        # Cálculo de IVA (Asumiendo que el precio en DB es sin IVA)
-        # Si el precio en DB ya tiene IVA, quita la multiplicación * 1.16
         try:
             precio_final = float(precio_base) * 1.16 
         except:
             precio_final = 0.0
 
-        # Mostrar Resultados
         st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 20px;'>{sku_val}</div>", unsafe_allow_html=True)
         st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
         
@@ -204,17 +216,21 @@ if (busqueda_input or boton_consultar):
             st.markdown(f"<div style='text-align: center; font-size: 14px; font-weight: bold; margin-top: 5px;'>Precio por Unidad. Neto (Incluye IVA). Moneda Nacional.</div>", unsafe_allow_html=True)
         else:
             st.warning("Precio no disponible.")
-    
     else:
-        st.error("❌ CÓDIGO NO ENCONTRADO O ERROR DE CONEXIÓN")
+        if supabase:
+            st.error("❌ CÓDIGO NO ENCONTRADO")
 
-
-# --- 7. FOOTER LEGAL ---
+# --- 8. FOOTER LEGAL ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
     <strong>INFORMACIÓN COMERCIAL Y MARCO LEGAL</strong><br>
-    ... (Mismo footer que tenías) ...
-    Timbre digital: <strong>{fecha_actual.strftime("%d/%m/%Y %H:%M:%S")}</strong>
+    La información de precios mostrada en este verificador digital cumple estrictamente con las disposiciones legales vigentes en los Estados Unidos Mexicanos:
+    <br><br>
+    <strong>1. PRECIO TOTAL A PAGAR (LFPC Art. 7 Bis):</strong> En cumplimiento con la Ley Federal de Protección al Consumidor, el precio exhibido representa el monto final e inequívoco a pagar por el consumidor. Este importe incluye el costo del producto, el Impuesto al Valor Agregado (IVA del 16%) y cualquier cargo administrativo aplicable, evitando prácticas comerciales engañosas.
+    <br><br>
+    <strong>2. VIGENCIA Y EXACTITUD (NOM-174-SCFI-2007):</strong> El precio mostrado es válido exclusivamente al momento de la consulta (Timbre digital: <strong>{fecha_actual.strftime("%d/%m/%Y %H:%M:%S")}</strong>). Toyota Los Fuertes garantiza el respeto al precio exhibido al momento de la transacción conforme a lo dispuesto en las Normas Oficiales Mexicanas sobre prácticas comerciales en transacciones electrónicas y de información.
+    <br><br>
+    <strong>3. INFORMACIÓN COMERCIAL (NOM-050-SCFI-2004):</strong> La descripción y especificaciones de las partes cumplen con los requisitos de información comercial general para productos destinados a consumidores en el territorio nacional.
 </div>
 """, unsafe_allow_html=True)
