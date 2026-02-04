@@ -19,3 +19,6 @@ streamlit-lottie
 requests
 reportlab
 sentry-sdk
+requests
+beautifulsoup4
+
