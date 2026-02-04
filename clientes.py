@@ -10,7 +10,9 @@ import pytz
 import sentry_sdk
 from supabase import create_client, Client
 
-# --- 1. CONFIGURACIÓN INICIAL Y FECHA (CRÍTICO: ESTO VA PRIMERO) ---
+# --- 1. CONFIGURACIÓN INICIAL (CRÍTICO: ORDEN DE EJECUCIÓN) ---
+
+# Función para obtener secretos de Railway o Local
 def get_secret(key):
     val = os.environ.get(key)
     if val: return val
@@ -19,6 +21,7 @@ def get_secret(key):
     except: pass
     return None
 
+# Inicialización de Sentry (Monitoreo de errores)
 sentry_dsn = get_secret("SENTRY_DSN")
 if sentry_dsn:
     try:
@@ -31,16 +34,19 @@ st.set_page_config(
     layout="centered"
 )
 
-# Definimos la hora inmediatamente para evitar NameError
-try: tz_cdmx = pytz.timezone('America/Mexico_City')
-except: tz_cdmx = None
+# Definimos la hora INMEDIATAMENTE para evitar errores de variables no definidas
+try: 
+    tz_cdmx = pytz.timezone('America/Mexico_City')
+except: 
+    tz_cdmx = None
 
 def obtener_hora_mx():
     return datetime.now(tz_cdmx) if tz_cdmx else datetime.now()
 
-fecha_actual = obtener_hora_mx() # <--- AQUI SE CALCULA ANTES DE USARSE
+fecha_actual = obtener_hora_mx() # Variable global de fecha
 
-# --- 2. FIX NUCLEAR PARA MÓVILES ---
+# --- 2. FIX NUCLEAR PARA MÓVILES (ESTABILIDAD) ---
+# Bloquea la traducción automática de Chrome que rompe la App en Android/iOS
 st.markdown("""
     <script>
         document.documentElement.lang = 'es';
@@ -50,6 +56,8 @@ st.markdown("""
     <style>
         .goog-te-banner-frame { display: none !important; }
         .notranslate { transform: translateZ(0); }
+        
+        /* Ajuste específico para que las imágenes scraped se vean bien en móvil */
         div[data-testid="stImage"] img { 
             border-radius: 12px; 
             max-height: 280px; 
@@ -58,12 +66,10 @@ st.markdown("""
             display: block;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .sku-display { font-size: 32px !important; font-weight: 900 !important; text-transform: uppercase; }
-        #MainMenu, footer, header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. CONEXIÓN SUPABASE ---
+# --- 3. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
     url = get_secret("SUPABASE_URL")
@@ -76,39 +82,151 @@ try:
 except:
     supabase = None
 
-# --- 4. TEMAS VISUALES ---
+# --- 4. TEMAS VISUALES Y ESTILOS (RESTAURADO COMPLETO) ---
 def get_theme_by_time(date):
     h = date.hour
-    # 🌅 MAÑANA
+    
+    # 🌅 MAÑANA (6 AM - 12 PM): Amanecer Limpio
     if 6 <= h < 12:
-        return {"css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)", "card_bg": "rgba(255, 255, 255, 0.95)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
-    # ☀️ TARDE
+        return {
+            "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
+            "card_bg": "rgba(255, 255, 255, 0.95)",
+            "text_color": "#000000",
+            "text_shadow": "none",
+            "accent_color": "#eb0a1e",
+            "footer_border": "#000000"
+        }
+    
+    # ☀️ TARDE (12 PM - 7 PM): Día Soleado (Alto Contraste)
     elif 12 <= h < 19:
-        return {"css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)", "card_bg": "rgba(255, 255, 255, 1)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
-    # 🌌 NOCHE
+        return {
+            "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
+            "card_bg": "rgba(255, 255, 255, 1)",
+            "text_color": "#000000",
+            "text_shadow": "none",
+            "accent_color": "#eb0a1e",
+            "footer_border": "#000000"
+        }
+    
+    # 🌌 NOCHE (7 PM - 6 AM): Cielo Estrellado "Natural"
     else:
-        return {"css_bg": "radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px), linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)", "bg_size": "550px 550px, 100% 100%", "bg_pos": "0 0, 0 0", "card_bg": "rgba(0, 0, 0, 0.9)", "text_color": "#FFFFFF", "text_shadow": "0px 2px 4px #000000", "accent_color": "#ff4d4d", "footer_border": "#FFFFFF"}
+        return {
+            "css_bg": """
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 3px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 4px),
+                linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)
+            """,
+            "bg_size": "550px 550px, 350px 350px, 250px 250px, 100% 100%",
+            "bg_pos": "0 0, 40px 60px, 130px 270px, 0 0",
+            "card_bg": "rgba(0, 0, 0, 0.9)",
+            "text_color": "#FFFFFF",
+            "text_shadow": "0px 2px 4px #000000",
+            "accent_color": "#ff4d4d",
+            "footer_border": "#FFFFFF"
+        }
 
 def apply_dynamic_styles():
     theme = get_theme_by_time(fecha_actual)
-    bg_extra_css = f"background-size: {theme.get('bg_size', 'auto')}; background-position: {theme.get('bg_pos', 'center')};" if "bg_size" in theme else ""
+    
+    bg_extra_css = ""
+    if "bg_size" in theme:
+        bg_extra_css = f"background-size: {theme['bg_size']}; background-position: {theme['bg_pos']};"
     
     st.markdown(f"""
         <style>
-        :root {{ --text-color: {theme['text_color']}; --card-bg: {theme['card_bg']}; --accent: {theme['accent_color']}; }}
-        .stApp {{ background-image: {theme['css_bg']} !important; {bg_extra_css} background-attachment: fixed; }}
-        [data-testid="stBlockContainer"] {{ background-color: var(--card-bg); border-radius: 15px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-top: 20px; }}
-        h1, h2, h3, p, div, span {{ color: {theme['text_color']} !important; text-shadow: {theme['text_shadow']}; }}
-        .stTextInput input {{ background-color: white !important; color: black !important; font-size: 24px !important; font-weight: 900 !important; text-align: center !important; border: 3px solid {theme['accent_color']} !important; border-radius: 10px; }}
-        .big-price {{ color: {theme['accent_color']} !important; font-size: 60px; font-weight: 900; text-align: center; margin: 10px 0; text-shadow: 2px 2px 0px black !important; }}
-        .stButton button {{ background-color: {theme['accent_color']} !important; color: white !important; font-weight: bold; font-size: 18px; border-radius: 8px; width: 100%; }}
-        .legal-footer {{ border-top: 1px solid {theme['footer_border']}; font-size: 11px; margin-top: 40px; padding-top: 20px; text-align: justify; opacity: 0.9; }}
+        /* --- VARIABLES --- */
+        :root {{
+            --text-color: {theme['text_color']};
+            --card-bg: {theme['card_bg']};
+            --accent: {theme['accent_color']};
+        }}
+
+        /* 1. FONDO DE PANTALLA */
+        .stApp {{
+            background-image: {theme['css_bg']} !important;
+            {bg_extra_css}
+            background-attachment: fixed;
+        }}
+        
+        /* 2. TARJETA CENTRAL */
+        [data-testid="stBlockContainer"] {{
+            background-color: var(--card-bg) !important;
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            max-width: 700px;
+            margin-top: 20px;
+            border: 1px solid rgba(128,128,128, 0.3);
+        }}
+
+        /* 3. TIPOGRAFÍA GLOBAL */
+        h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
+            color: var(--text-color) !important;
+            text-shadow: {theme['text_shadow']} !important;
+            font-family: sans-serif;
+        }}
+        
+        /* 4. INPUT (CAMPO DE TEXTO) */
+        .stTextInput input {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+            font-weight: 900 !important;
+            font-size: 24px !important;
+            border: 3px solid var(--accent) !important;
+            text-align: center !important;
+            border-radius: 10px;
+        }}
+        
+        /* 5. PRECIO GRANDE */
+        .big-price {{
+            color: var(--accent) !important;
+            font-size: clamp(50px, 15vw, 100px); 
+            font-weight: 900;
+            text-align: center;
+            line-height: 1.1;
+            margin: 10px 0;
+            text-shadow: 2px 2px 0px black !important;
+        }}
+
+        /* 6. BOTÓN CONSULTAR */
+        .stButton button {{
+            background-color: var(--accent) !important;
+            color: white !important;
+            border: 1px solid white;
+            font-weight: bold;
+            font-size: 18px;
+            border-radius: 8px;
+            width: 100%;
+        }}
+        
+        /* 7. VISUALIZACIÓN SKU */
+        .sku-display {{
+            font-size: 32px !important;
+            font-weight: 900 !important;
+            text-transform: uppercase;
+        }}
+        
+        /* 8. OCULTAR ELEMENTOS DE STREAMLIT */
+        #MainMenu, footer, header {{visibility: hidden;}}
+        
+        /* 9. FOOTER LEGAL */
+        .legal-footer {{
+            border-top: 1px solid {theme['footer_border']} !important;
+            opacity: 0.9;
+            font-size: 11px;
+            margin-top: 40px;
+            padding-top: 20px;
+            text-align: justify;
+        }}
         </style>
     """, unsafe_allow_html=True)
 
+# Aplicamos los estilos inmediatamente
 apply_dynamic_styles()
 
-# --- 5. FUNCIONES AUXILIARES ---
+# --- 5. FUNCIONES DE LÓGICA ---
 
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
@@ -117,14 +235,19 @@ def traducir_texto(texto):
 
 @st.cache_data(ttl=3600, show_spinner=False) 
 def obtener_imagen_remota(sku):
-    """ MOTOR HÍBRIDO: Busca en Elmhurst y luego en PartSouq """
+    """
+    MOTOR HÍBRIDO DE IMÁGENES:
+    1. Busca en Elmhurst Toyota (USA)
+    2. Si falla, busca en PartSouq (Global)
+    Usa headers de iPhone para evitar bloqueos.
+    """
     headers = {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "es-MX,es;q=0.9"
     }
     
-    # 1. ELMHURST
+    # 1. INTENTO: ELMHURST
     try:
         url1 = f"https://parts.elmhursttoyota.com/search?search_str={sku}"
         r = requests.get(url1, headers=headers, timeout=3)
@@ -140,7 +263,7 @@ def obtener_imagen_remota(sku):
                     return src
     except: pass
     
-    # 2. PARTSOUQ
+    # 2. INTENTO: PARTSOUQ
     try:
         url2 = f"https://partsouq.com/es/search/all?q={sku}"
         r = requests.get(url2, headers=headers, timeout=4)
@@ -168,10 +291,10 @@ def buscar_producto_supabase(sku_usuario):
     except: pass
     return None
 
-# --- 6. INTERFAZ ---
+# --- 6. INTERFAZ: ENCABEZADO (FECHA ARRIBA) ---
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    # FECHA ARRIBA DEL LOGO
+    # 1. Fecha y Hora (Arriba)
     st.markdown(f"""
     <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 5px;">
         LOS FUERTES<br>
@@ -179,6 +302,7 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
     
+    # 2. Logotipo (Abajo)
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True) 
     else:
@@ -190,18 +314,19 @@ st.markdown("<h3 style='text-align: center; font-weight: 800;'>VERIFICADOR DE PR
 busqueda = st.text_input("Ingresa SKU:", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed").strip()
 btn = st.button("🔍 CONSULTAR PRECIO")
 
-# --- 7. LÓGICA DE RESULTADOS ---
+# --- 7. RESULTADOS Y LÓGICA ---
 if busqueda or btn:
     if not supabase:
         st.error("❌ Sin conexión.")
     else:
+        # Usamos un mensaje estático en lugar de spinner para no romper en móviles
         aviso = st.empty()
         aviso.info("⏳ Consultando bases de datos...")
         
         producto = buscar_producto_supabase(busqueda)
         url_imagen = obtener_imagen_remota(busqueda)
         
-        aviso.empty()
+        aviso.empty() # Limpiamos el mensaje
 
         if producto:
             sku_val = producto.get('item', busqueda)
@@ -212,13 +337,13 @@ if busqueda or btn:
             try: final = float(precio) * 1.16
             except: final = 0.0
             
-            # IMAGEN
+            # 1. IMAGEN (Referencial)
             if url_imagen:
                 st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
             else:
                 st.info("📷 Imagen no disponible digitalmente.")
 
-            # DATOS
+            # 2. DATOS
             st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
             st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
             
@@ -230,7 +355,7 @@ if busqueda or btn:
         else:
             st.error("❌ CÓDIGO NO ENCONTRADO")
 
-# --- 8. FOOTER LEGAL ---
+# --- 8. FOOTER LEGAL COMPLETO ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
