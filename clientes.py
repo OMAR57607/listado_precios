@@ -30,6 +30,28 @@ st.set_page_config(
     layout="centered"
 )
 
+# --- 1.5 FIX CRÍTICO PARA MÓVILES (ERROR removeChild) ---
+# Este script evita que el navegador intente traducir automáticamente la página,
+# lo cual es la causa #1 del error "NotFoundError: removeChild" en Android/iOS.
+st.markdown("""
+    <script>
+        // 1. Decirle al navegador que la página ya está en español
+        document.documentElement.lang = 'es';
+        // 2. Prohibir explícitamente la traducción automática de Google Chrome
+        document.documentElement.setAttribute('translate', 'no');
+        // 3. Añadir meta tag de no-traducción por seguridad
+        var meta = document.createElement('meta');
+        meta.name = "google";
+        meta.content = "notranslate";
+        document.getElementsByTagName('head')[0].appendChild(meta);
+    </script>
+    <style>
+        /* Ocultar el aviso de "traducir esta página" de Chrome */
+        .goog-te-banner-frame { display: none !important; }
+        body { top: 0px !important; }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- 2. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
@@ -286,4 +308,3 @@ st.markdown(f"""
     <strong>3. INFORMACIÓN COMERCIAL (NOM-050-SCFI-2004):</strong> La descripción y especificaciones de las partes cumplen con los requisitos de información comercial general para productos destinados a consumidores en el territorio nacional.
 </div>
 """, unsafe_allow_html=True)
-
