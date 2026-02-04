@@ -66,7 +66,7 @@ try:
 except:
     supabase = None
 
-# --- 3. TEMAS VISUALES ---
+# --- 3. LÓGICA DE TEMAS VISUALES (RESTAURADA COMPLETA) ---
 try: tz_cdmx = pytz.timezone('America/Mexico_City')
 except: tz_cdmx = None
 
@@ -75,27 +75,147 @@ def obtener_hora_mx():
 
 def get_theme_by_time(date):
     h = date.hour
-    if 6 <= h < 12: 
-        return {"css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)", "card_bg": "rgba(255, 255, 255, 0.95)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
+    
+    # 🌅 MAÑANA (6 AM - 12 PM)
+    if 6 <= h < 12:
+        return {
+            "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
+            "card_bg": "rgba(255, 255, 255, 0.95)",
+            "text_color": "#000000",
+            "text_shadow": "none",
+            "accent_color": "#eb0a1e",
+            "footer_border": "#000000"
+        }
+    
+    # ☀️ TARDE (12 PM - 7 PM)
     elif 12 <= h < 19:
-        return {"css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)", "card_bg": "rgba(255, 255, 255, 1)", "text_color": "#000000", "text_shadow": "none", "accent_color": "#eb0a1e", "footer_border": "#000000"}
+        return {
+            "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
+            "card_bg": "rgba(255, 255, 255, 1)",
+            "text_color": "#000000",
+            "text_shadow": "none",
+            "accent_color": "#eb0a1e",
+            "footer_border": "#000000"
+        }
+    
+    # 🌌 NOCHE (7 PM - 6 AM)
     else:
-        return {"css_bg": "radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px), linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)", "bg_size": "550px 550px, 100% 100%", "bg_pos": "0 0, 0 0", "card_bg": "rgba(0, 0, 0, 0.9)", "text_color": "#FFFFFF", "text_shadow": "0px 2px 4px #000000", "accent_color": "#ff4d4d", "footer_border": "#FFFFFF"}
+        return {
+            "css_bg": """
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 3px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 4px),
+                linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)
+            """,
+            "bg_size": "550px 550px, 350px 350px, 250px 250px, 100% 100%",
+            "bg_pos": "0 0, 40px 60px, 130px 270px, 0 0",
+            "card_bg": "rgba(0, 0, 0, 0.9)",
+            "text_color": "#FFFFFF",
+            "text_shadow": "0px 2px 4px #000000",
+            "accent_color": "#ff4d4d",
+            "footer_border": "#FFFFFF"
+        }
 
-theme = get_theme_by_time(obtener_hora_mx())
-st.markdown(f"""
-    <style>
-    .stApp {{ background-image: {theme['css_bg']} !important; background-attachment: fixed; }}
-    [data-testid="stBlockContainer"] {{ background-color: var(--card-bg); border-radius: 15px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-top: 20px; }}
-    h1, h2, h3, p, div, span {{ color: {theme['text_color']} !important; text-shadow: {theme['text_shadow']}; }}
-    .stTextInput input {{ background-color: white !important; color: black !important; font-size: 24px !important; font-weight: 900 !important; text-align: center !important; border: 3px solid {theme['accent_color']} !important; border-radius: 10px; }}
-    .big-price {{ color: {theme['accent_color']} !important; font-size: 60px; font-weight: 900; text-align: center; margin: 10px 0; text-shadow: 2px 2px 0px black !important; }}
-    .stButton button {{ background-color: {theme['accent_color']} !important; color: white !important; font-weight: bold; font-size: 18px; border-radius: 8px; width: 100%; }}
-    .legal-footer {{ border-top: 1px solid {theme['footer_border']}; font-size: 11px; margin-top: 40px; padding-top: 20px; text-align: justify; opacity: 0.9; }}
-    .sku-display {{ font-size: 32px !important; font-weight: 900 !important; text-transform: uppercase; }}
-    #MainMenu, footer, header {{visibility: hidden;}}
-    </style>
-""", unsafe_allow_html=True)
+def apply_dynamic_styles():
+    now = obtener_hora_mx()
+    theme = get_theme_by_time(now)
+    
+    bg_extra_css = ""
+    if "bg_size" in theme:
+        bg_extra_css = f"background-size: {theme['bg_size']}; background-position: {theme['bg_pos']};"
+    
+    st.markdown(f"""
+        <style>
+        /* --- VARIABLES --- */
+        :root {{
+            --text-color: {theme['text_color']};
+            --card-bg: {theme['card_bg']};
+            --accent: {theme['accent_color']};
+        }}
+
+        /* 1. FONDO DE PANTALLA */
+        .stApp {{
+            background-image: {theme['css_bg']} !important;
+            {bg_extra_css}
+            background-attachment: fixed;
+        }}
+        
+        /* 2. TARJETA CENTRAL */
+        [data-testid="stBlockContainer"] {{
+            background-color: var(--card-bg) !important;
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            max-width: 700px;
+            margin-top: 20px;
+            border: 1px solid rgba(128,128,128, 0.3);
+        }}
+
+        /* 3. TEXTOS */
+        h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
+            color: var(--text-color) !important;
+            text-shadow: {theme['text_shadow']} !important;
+            font-family: sans-serif;
+        }}
+        
+        /* 4. INPUT */
+        .stTextInput input {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+            font-weight: 900 !important;
+            font-size: 24px !important;
+            border: 3px solid var(--accent) !important;
+            text-align: center !important;
+            border-radius: 10px;
+        }}
+        
+        /* 5. PRECIO */
+        .big-price {{
+            color: var(--accent) !important;
+            font-size: clamp(50px, 15vw, 100px); 
+            font-weight: 900;
+            text-align: center;
+            line-height: 1.1;
+            margin: 10px 0;
+            text-shadow: 2px 2px 0px black !important;
+        }}
+
+        /* 6. BOTÓN */
+        .stButton button {{
+            background-color: var(--accent) !important;
+            color: white !important;
+            border: 1px solid white;
+            font-weight: bold;
+            font-size: 18px;
+            border-radius: 8px;
+            width: 100%;
+        }}
+        
+        /* 7. SKU DISPLAY */
+        .sku-display {{
+            font-size: 32px !important;
+            font-weight: 900 !important;
+            text-transform: uppercase;
+        }}
+        
+        /* 8. KIOSCO */
+        #MainMenu, footer, header {{visibility: hidden;}}
+        
+        /* 9. FOOTER LEGAL */
+        .legal-footer {{
+            border-top: 1px solid {theme['footer_border']} !important;
+            opacity: 0.9;
+            font-size: 11px;
+            margin-top: 40px;
+            padding-top: 20px;
+            text-align: justify;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+
+apply_dynamic_styles()
+fecha_actual = obtener_hora_mx()
 
 # --- 4. FUNCIONES ---
 
@@ -167,6 +287,7 @@ def buscar_producto_supabase(sku_usuario):
 # --- 5. INTERFAZ ---
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
+    # FECHA ARRIBA
     st.markdown(f"""
     <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 5px;">
         LOS FUERTES<br>
@@ -174,6 +295,7 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
     
+    # LOGO ABAJO
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True) 
     else:
@@ -211,7 +333,6 @@ if busqueda or btn:
             if url_imagen:
                 st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
             else:
-                # Opcional: Puedes quitar este 'else' si prefieres que no salga nada si no hay foto
                 st.info("📷 Imagen no disponible digitalmente.")
 
             st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
@@ -225,7 +346,7 @@ if busqueda or btn:
         else:
             st.error("❌ CÓDIGO NO ENCONTRADO")
 
-# --- 7. FOOTER LEGAL ---
+# --- 7. FOOTER LEGAL RESTAURADO ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
