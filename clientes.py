@@ -7,24 +7,18 @@ import pytz
 import sentry_sdk
 from supabase import create_client, Client
 
-# --- 1. FUNCIÓN DE SEGURIDAD HÍBRIDA (RAILWAY + LOCAL) ---
+# --- 1. FUNCIÓN DE SEGURIDAD HÍBRIDA ---
 def get_secret(key):
-    """
-    Busca la clave secreta primero en las Variables de Entorno (Railway),
-    y si no está, la busca en los secretos locales de Streamlit.
-    """
-    # 1. Intenta leer desde las variables del sistema (Railway)
+    # 1. Busca en Railway (Variables del sistema)
     val = os.environ.get(key)
     if val:
         return val
-        
-    # 2. Si no existe, intenta leer desde secrets.toml (Local)
+    # 2. Busca en Local (secrets.toml)
     try:
         if key in st.secrets:
             return st.secrets[key]
     except:
         pass
-        
     return None
 
 # --- 2. CONFIGURACIÓN DE SENTRY ---
@@ -37,8 +31,8 @@ if sentry_dsn:
             traces_sample_rate=1.0,
             profiles_sample_rate=1.0,
         )
-    except Exception as e:
-        print(f"Advertencia Sentry: {e}")
+    except:
+        pass
 
 # Configuración de página
 st.set_page_config(
@@ -50,7 +44,6 @@ st.set_page_config(
 # --- 3. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
-    # USAMOS LA FUNCIÓN get_secret, NO st.secrets DIRECTAMENTE
     url = get_secret("SUPABASE_URL")
     key = get_secret("SUPABASE_KEY")
     
@@ -61,13 +54,11 @@ def init_supabase():
 
 try:
     supabase = init_supabase()
-    if not supabase:
-        st.error("❌ Error de configuración: No se encontraron las credenciales SUPABASE_URL o SUPABASE_KEY en las variables de Railway.")
 except Exception as e:
     st.error(f"Error conectando a la base de datos: {e}")
     supabase = None
 
-# --- 4. LÓGICA DE TEMAS VISUALES ---
+# --- 4. TEMAS VISUALES ---
 try:
     tz_cdmx = pytz.timezone('America/Mexico_City')
 except:
@@ -80,8 +71,7 @@ def obtener_hora_mx():
 
 def get_theme_by_time(date):
     h = date.hour
-    # 🌅 MAÑANA (6 AM - 12 PM)
-    if 6 <= h < 12:
+    if 6 <= h < 12: # Mañana
         return {
             "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
             "card_bg": "rgba(255, 255, 255, 0.95)",
@@ -90,8 +80,7 @@ def get_theme_by_time(date):
             "accent_color": "#eb0a1e",
             "footer_border": "#000000"
         }
-    # ☀️ TARDE (12 PM - 7 PM)
-    elif 12 <= h < 19:
+    elif 12 <= h < 19: # Tarde
         return {
             "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
             "card_bg": "rgba(255, 255, 255, 1)",
@@ -100,8 +89,7 @@ def get_theme_by_time(date):
             "accent_color": "#eb0a1e",
             "footer_border": "#000000"
         }
-    # 🌌 NOCHE (7 PM - 6 AM)
-    else:
+    else: # Noche
         return {
             "css_bg": """
                 radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
@@ -148,18 +136,22 @@ fecha_actual = obtener_hora_mx()
 def buscar_producto_supabase(sku_usuario):
     if not supabase:
         return None
+    
+    # Limpiamos el SKU ingresado para quitar guiones y espacios
     sku_clean = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
+    
     try:
-        # Asegúrate de que 'lista_precios' sea el nombre real de tu tabla
-        response = supabase.table('lista_precios') \
+        # AQUÍ ESTÁ EL CAMBIO: Usamos 'catalogo_toyota'
+        # IMPORTANTE: Supabase busca en la columna 'sku_clean'
+        response = supabase.table('catalogo_toyota') \
             .select("*") \
             .eq('sku_clean', sku_clean) \
             .execute()
+            
         if response.data and len(response.data) > 0:
             return response.data[0]
         return None
     except Exception as e:
-        # Captura silenciosa para Sentry
         if sentry_dsn: sentry_sdk.capture_exception(e)
         st.error(f"Error consultando DB: {e}")
         return None
@@ -189,35 +181,38 @@ boton_consultar = st.button("🔍 CONSULTAR PRECIO")
 
 # --- 7. RESULTADOS ---
 if (busqueda_input or boton_consultar):
-    with st.spinner('Buscando en la nube...'):
-        producto = buscar_producto_supabase(busqueda_input)
-
-    if producto:
-        # MAPEO DE COLUMNAS (Ajusta si tus columnas en Supabase se llaman diferente)
-        sku_val = producto.get('sku', busqueda_input) 
-        desc_original = producto.get('descripcion', 'Sin descripción')
-        precio_base = producto.get('precio', 0)
-        
-        try:
-            desc_es = GoogleTranslator(source='auto', target='es').translate(desc_original)
-        except:
-            desc_es = desc_original
-
-        try:
-            precio_final = float(precio_base) * 1.16 
-        except:
-            precio_final = 0.0
-
-        st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 20px;'>{sku_val}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
-        
-        if precio_final > 0:
-            st.markdown(f"<div class='big-price'>${precio_final:,.2f}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='text-align: center; font-size: 14px; font-weight: bold; margin-top: 5px;'>Precio por Unidad. Neto (Incluye IVA). Moneda Nacional.</div>", unsafe_allow_html=True)
-        else:
-            st.warning("Precio no disponible.")
+    if not supabase:
+        st.error("❌ Error: No hay conexión a la base de datos.")
     else:
-        if supabase:
+        with st.spinner('Buscando...'):
+            producto = buscar_producto_supabase(busqueda_input)
+
+        if producto:
+            # MAPEO DE COLUMNAS 
+            # Si en tu Excel la columna del SKU se llama diferente (ej: 'Material'), cambia 'sku' por 'Material'
+            sku_val = producto.get('sku', busqueda_input) 
+            desc_original = producto.get('descripcion', 'Descripción no disponible')
+            precio_base = producto.get('precio', 0)
+            
+            try:
+                desc_es = GoogleTranslator(source='auto', target='es').translate(desc_original)
+            except:
+                desc_es = desc_original
+
+            try:
+                precio_final = float(precio_base) * 1.16 
+            except:
+                precio_final = 0.0
+
+            st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 20px;'>{sku_val}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
+            
+            if precio_final > 0:
+                st.markdown(f"<div class='big-price'>${precio_final:,.2f}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align: center; font-size: 14px; font-weight: bold; margin-top: 5px;'>Precio por Unidad. Neto (Incluye IVA). Moneda Nacional.</div>", unsafe_allow_html=True)
+            else:
+                st.warning("Precio no disponible.")
+        else:
             st.error("❌ CÓDIGO NO ENCONTRADO")
 
 # --- 8. FOOTER LEGAL ---
