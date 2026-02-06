@@ -179,16 +179,19 @@ def apply_dynamic_styles():
             background-color: var(--accent) !important;
             color: white !important;
             border: 1px solid white;
-            font-weight: bold;
-            font-size: 18px;
+            font-weight: 800; /* Más negrita */
+            font-size: 20px; /* Letra más grande */
             border-radius: 8px;
             width: 100%;
-            padding: 0.5rem 1rem;
+            padding: 0.8rem 1rem; /* Botón más alto */
             transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }}
         .stButton button:hover {{
             transform: scale(1.02);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
         }}
         .sku-display {{
             font-size: 32px !important;
@@ -196,14 +199,33 @@ def apply_dynamic_styles():
             text-transform: uppercase;
             letter-spacing: 1px;
         }}
-        [data-testid="stMetricLabel"] {{
-            font-weight: bold;
+        
+        /* ESTILO PARA LA TARJETA DEL TOTAL */
+        .total-card {{
+            background-color: rgba(240, 242, 246, 0.95);
+            border-left: 6px solid var(--accent);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }}
+        .total-label {{
             font-size: 16px;
+            font-weight: bold;
+            color: #333 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-shadow: none !important;
         }}
-        [data-testid="stMetricValue"] {{
-            font-size: 24px;
-            color: var(--accent) !important;
+        .total-value {{
+            font-size: 32px;
+            font-weight: 900;
+            color: #000 !important; /* Negro intenso para diferenciar del rojo unitario */
+            text-shadow: none !important;
+            margin-top: 5px;
         }}
+        
         #MainMenu, footer, header {{visibility: hidden;}}
         .legal-footer {{
             border-top: 1px solid {theme['footer_border']} !important;
@@ -304,13 +326,15 @@ with col2:
 st.markdown("---")
 st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR DIGITAL</h3>", unsafe_allow_html=True)
 
-# --- 7. BUSCADOR ---
+# --- 7. BUSCADOR MEJORADO ---
 with st.form(key='search_form'):
-    col_input, col_btn = st.columns([3, 1])
+    # Botón y input ajustados
+    col_input, col_btn = st.columns([2, 2]) # Le damos más espacio al botón para que luzca
     with col_input:
         busqueda_input = st.text_input("SKU", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed")
     with col_btn:
-        submit_btn = st.form_submit_button("🔍")
+        # BOTÓN SEXY Y LLAMATIVO
+        submit_btn = st.form_submit_button("🚀 CONSULTAR PRECIO 🔥", use_container_width=True)
 
 if submit_btn and busqueda_input:
     st.session_state.busqueda_activa = busqueda_input
@@ -332,12 +356,11 @@ if st.session_state.busqueda_activa:
                 desc_raw = producto.get('descripcion', 'Sin descripción')
                 precio_base = float(producto.get('total_unitario', 0))
                 
-                # --- IMAGEN (Lógica Restaurada) ---
+                # --- IMAGEN (Lógica Restaurada Clásica) ---
                 url_imagen = producto.get('img_url') 
                 
                 if not url_imagen:
                     if not st.session_state.imagen_cache:
-                        # Usamos la función clásica
                         url_imagen = obtener_imagen_clasica(sku_val)
                         st.session_state.imagen_cache = url_imagen
                         guardar_datos_enriquecidos(sku_val, url_imagen)
@@ -368,13 +391,21 @@ if st.session_state.busqueda_activa:
                     
                     st.markdown("---")
                     
-                    # --- CALCULADORA ---
+                    # --- CALCULADORA SEXY ---
                     c1, c2 = st.columns([1, 1])
                     with c1:
+                        # Espacio vertical para alinear con la tarjeta
+                        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
                         cantidad = st.number_input("Cantidad:", min_value=1, value=1, step=1)
                     with c2:
                         total_calculado = final_unitario * cantidad
-                        st.metric("Total a Pagar", f"${total_calculado:,.2f}")
+                        # AQUÍ ESTÁ EL TOTALIZADOR ATRACTIVO
+                        st.markdown(f"""
+                        <div class="total-card">
+                            <div class="total-label">Total Neto ({int(cantidad)} Pzas)</div>
+                            <div class="total-value">${total_calculado:,.2f}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
                     st.warning("Precio no disponible.")
             else:
