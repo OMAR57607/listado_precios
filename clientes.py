@@ -179,34 +179,33 @@ def apply_dynamic_styles():
             margin: 10px 0;
             text-shadow: 2px 2px 0px black !important;
         }}
-        .stButton button {{
+        
+        /* --- CORRECCIÓN DEL BOTÓN (SELECTOR AGRESIVO) --- */
+        /* Apuntamos directamente al botón dentro de stButton y usamos !important en todo */
+        .stButton > button, div[data-testid="stButton"] > button {{
             background-color: var(--accent) !important;
-            color: white !important;
-            border: 1px solid white;
-            font-weight: 800;
-            font-size: 20px;
-            border-radius: 8px;
+            color: #ffffff !important; /* Blanco forzado Hex */
+            border: 1px solid white !important;
+            font-weight: 800 !important;
+            font-size: 20px !important;
+            border-radius: 8px !important;
             width: 100%;
-            padding: 0.8rem 1rem;
-            transition: all 0.3s ease;
+            padding: 0.8rem 1rem !important;
             text-transform: uppercase;
             letter-spacing: 1px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            opacity: 1 !important; /* Evitar transparencias del modo oscuro */
         }}
-        .stButton button:hover {{
+        .stButton > button:hover {{
             transform: scale(1.02);
             box-shadow: 0 5px 15px rgba(0,0,0,0.4);
-        }}
-        .sku-display {{
-            font-size: 32px !important;
-            font-weight: 900 !important;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            color: #ffffff !important;
+            border-color: #ffffff !important;
         }}
         
         /* --- TARJETA INTELIGENTE ADAPTATIVA --- */
         .total-card {{
-            background-color: var(--total-bg); /* Fondo dinámico */
+            background-color: var(--total-bg);
             border-left: 6px solid var(--accent);
             padding: 15px;
             border-radius: 10px;
@@ -217,7 +216,7 @@ def apply_dynamic_styles():
         .total-label {{
             font-size: 16px;
             font-weight: bold;
-            color: var(--text-color) !important; /* Texto se adapta (Blanco/Negro) */
+            color: var(--text-color) !important;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             text-shadow: none !important;
@@ -226,7 +225,7 @@ def apply_dynamic_styles():
         .total-value {{
             font-size: 32px;
             font-weight: 900;
-            color: var(--text-color) !important; /* Texto se adapta (Blanco/Negro) */
+            color: var(--text-color) !important;
             text-shadow: none !important;
             margin-top: 5px;
         }}
@@ -243,6 +242,7 @@ def apply_dynamic_styles():
         }}
         </style>
     """, unsafe_allow_html=True)
+
 
 apply_dynamic_styles()
 
