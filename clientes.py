@@ -20,7 +20,6 @@ def get_secret(key):
     except: pass
     return None
 
-# Inicialización de Sentry (Monitoreo de errores)
 sentry_dsn = get_secret("SENTRY_DSN")
 if sentry_dsn:
     try:
@@ -33,7 +32,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Inicializar estado de sesión para persistencia (CRÍTICO para la calculadora)
+# Inicializar estado de sesión
 if 'producto_actual' not in st.session_state:
     st.session_state.producto_actual = None
 if 'busqueda_activa' not in st.session_state:
@@ -51,7 +50,7 @@ def obtener_hora_mx():
 
 fecha_actual = obtener_hora_mx()
 
-# --- 2. FIX NUCLEAR PARA MÓVILES (ESTABILIDAD) ---
+# --- 2. FIX NUCLEAR PARA MÓVILES ---
 st.markdown("""
     <script>
         document.documentElement.lang = 'es';
@@ -62,7 +61,6 @@ st.markdown("""
         .goog-te-banner-frame { display: none !important; }
         .notranslate { transform: translateZ(0); }
         
-        /* Ajuste específico para imágenes */
         div[data-testid="stImage"] img { 
             border-radius: 12px; 
             max-height: 320px; 
@@ -87,11 +85,9 @@ try:
 except:
     supabase = None
 
-# --- 4. TEMAS VISUALES Y ESTILOS (COMPLETO) ---
+# --- 4. TEMAS VISUALES ---
 def get_theme_by_time(date):
     h = date.hour
-    
-    # 🌅 MAÑANA (6 AM - 12 PM)
     if 6 <= h < 12:
         return {
             "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
@@ -101,7 +97,6 @@ def get_theme_by_time(date):
             "accent_color": "#eb0a1e",
             "footer_border": "#000000"
         }
-    # ☀️ TARDE (12 PM - 7 PM)
     elif 12 <= h < 19:
         return {
             "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
@@ -111,7 +106,6 @@ def get_theme_by_time(date):
             "accent_color": "#eb0a1e",
             "footer_border": "#000000"
         }
-    # 🌌 NOCHE (7 PM - 6 AM)
     else:
         return {
             "css_bg": """
@@ -131,7 +125,6 @@ def get_theme_by_time(date):
 
 def apply_dynamic_styles():
     theme = get_theme_by_time(fecha_actual)
-    
     bg_extra_css = ""
     if "bg_size" in theme:
         bg_extra_css = f"background-size: {theme['bg_size']}; background-position: {theme['bg_pos']};"
@@ -143,13 +136,11 @@ def apply_dynamic_styles():
             --card-bg: {theme['card_bg']};
             --accent: {theme['accent_color']};
         }}
-
         .stApp {{
             background-image: {theme['css_bg']} !important;
             {bg_extra_css}
             background-attachment: fixed;
         }}
-        
         [data-testid="stBlockContainer"] {{
             background-color: var(--card-bg) !important;
             border-radius: 15px;
@@ -159,14 +150,11 @@ def apply_dynamic_styles():
             margin-top: 20px;
             border: 1px solid rgba(128,128,128, 0.3);
         }}
-
         h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
             color: var(--text-color) !important;
             text-shadow: {theme['text_shadow']} !important;
             font-family: sans-serif;
         }}
-        
-        /* INPUT MEJORADO */
         .stTextInput input {{
             background-color: #ffffff !important;
             color: #000000 !important;
@@ -178,8 +166,6 @@ def apply_dynamic_styles():
             border-radius: 10px;
             padding: 10px !important;
         }}
-        
-        /* PRECIO GRANDE */
         .big-price {{
             color: var(--accent) !important;
             font-size: clamp(40px, 12vw, 80px); 
@@ -189,8 +175,6 @@ def apply_dynamic_styles():
             margin: 10px 0;
             text-shadow: 2px 2px 0px black !important;
         }}
-
-        /* BOTÓN CONSULTAR */
         .stButton button {{
             background-color: var(--accent) !important;
             color: white !important;
@@ -206,16 +190,12 @@ def apply_dynamic_styles():
             transform: scale(1.02);
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }}
-        
-        /* SKU DISPLAY */
         .sku-display {{
             font-size: 32px !important;
             font-weight: 900 !important;
             text-transform: uppercase;
             letter-spacing: 1px;
         }}
-        
-        /* METRICAS (CANTIDAD Y TOTAL) */
         [data-testid="stMetricLabel"] {{
             font-weight: bold;
             font-size: 16px;
@@ -224,9 +204,7 @@ def apply_dynamic_styles():
             font-size: 24px;
             color: var(--accent) !important;
         }}
-        
         #MainMenu, footer, header {{visibility: hidden;}}
-        
         .legal-footer {{
             border-top: 1px solid {theme['footer_border']} !important;
             opacity: 0.9;
@@ -241,7 +219,7 @@ def apply_dynamic_styles():
 
 apply_dynamic_styles()
 
-# --- 5. LÓGICA DE NEGOCIO AVANZADA (SCRAPING HD & DB) ---
+# --- 5. LÓGICA DE NEGOCIO ---
 
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
@@ -250,18 +228,11 @@ def traducir_texto(texto):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_imagen_hd(sku):
-    """
-    MOTOR DE IMÁGENES HD v2.0
-    1. PartSouq (Link Profundo)
-    2. eBay (Hack 1600px)
-    3. Google (Fallback)
-    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
-    
-    # --- ESTRATEGIA 1: PARTSOUQ ---
+    # ESTRATEGIA 1: PARTSOUQ
     try:
         url = f"https://partsouq.com/en/search/all?q={sku}"
         r = requests.get(url, headers=headers, timeout=5)
@@ -269,19 +240,17 @@ def obtener_imagen_hd(sku):
             soup = BeautifulSoup(r.text, 'html.parser')
             td_img = soup.select_one('table.table tbody tr td.cid-img')
             if td_img:
-                # Buscamos el link 'href' que envuelve la imagen (suele ser la HD)
                 link_hd = td_img.find('a')
                 if link_hd and link_hd.get('href'):
                     src = link_hd.get('href')
                     if src.startswith("//"): return "https:" + src
                     if src.startswith("/"): return "https://partsouq.com" + src
                     return src
-                # Fallback a img src normal
                 img = td_img.find('img')
                 if img: return img.get('src')
     except: pass
 
-    # --- ESTRATEGIA 2: EBAY (HD HACK) ---
+    # ESTRATEGIA 2: EBAY
     try:
         url_ebay = f"https://www.ebay.com/sch/i.html?_nkw=toyota+{sku}&_sacat=0"
         r = requests.get(url_ebay, headers=headers, timeout=4)
@@ -290,14 +259,13 @@ def obtener_imagen_hd(sku):
             img_ebay = soup.select_one('.s-item__image-img')
             if img_ebay:
                 src = img_ebay.get('src')
-                # Forzar resolución 1600px reemplazando el código de tamaño en la URL
                 if 's-l' in src:
                     src_hd = src.replace('s-l64', 's-l1600').replace('s-l225', 's-l1600').replace('s-l300', 's-l1600').replace('s-l400', 's-l1600').replace('s-l500', 's-l1600')
                     return src_hd
                 return src
     except: pass
     
-    # --- ESTRATEGIA 3: GOOGLE IMÁGENES (Último recurso) ---
+    # ESTRATEGIA 3: GOOGLE
     try:
         url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
         r = requests.get(url_g, headers=headers, timeout=3)
@@ -309,37 +277,30 @@ def obtener_imagen_hd(sku):
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
                     return src
     except: pass
-    
     return None
 
 def buscar_producto_smart(sku_usuario):
-    """
-    Usa la función SQL 'sku_search' para ignorar guiones/espacios.
-    """
     if not supabase: return None
-    
-    # 1. Normalización Python
     sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
-    
     try:
-        # Intento 1: Usando la función virtual indexada (súper rápido)
         response = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_limpio).execute()
         if response.data: return response.data[0]
-        
-        # Intento 2: Fallback tradicional por si acaso
         response_legacy = supabase.table('catalogo_toyota').select("*").ilike('item', sku_limpio).execute()
         if response_legacy.data: return response_legacy.data[0]
     except: pass
     return None
 
-def guardar_datos_enriquecidos(id_producto, img_url=None):
+def guardar_datos_enriquecidos(sku_producto, img_url=None):
     """
-    Self-Healing: Guarda la imagen encontrada en la BD para el futuro.
+    CORREGIDO: Usa explícitamente la columna 'item' (SKU) para guardar.
     """
     if img_url:
         try:
-            supabase.table('catalogo_toyota').update({'img_url': img_url}).eq('id', id_producto).execute()
-        except: pass
+            # IMPORTANTE: Aquí usamos 'item' tal como está en tu tabla
+            supabase.table('catalogo_toyota').update({'img_url': img_url}).eq('item', sku_producto).execute()
+            print(f"✅ Imagen guardada para SKU: {sku_producto}")
+        except Exception as e:
+            print(f"⚠️ Error guardando imagen (Check RLS): {e}")
 
 # --- 6. INTERFAZ: HEADER ---
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -358,7 +319,7 @@ with col2:
 st.markdown("---")
 st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR DIGITAL</h3>", unsafe_allow_html=True)
 
-# --- 7. BUSCADOR (OPTIMIZADO MÓVIL) ---
+# --- 7. BUSCADOR ---
 with st.form(key='search_form'):
     col_input, col_btn = st.columns([3, 1])
     with col_input:
@@ -366,10 +327,9 @@ with st.form(key='search_form'):
     with col_btn:
         submit_btn = st.form_submit_button("🔍")
 
-# Gestión de Estado
 if submit_btn and busqueda_input:
     st.session_state.busqueda_activa = busqueda_input
-    st.session_state.imagen_cache = None # Reset imagen al buscar nuevo
+    st.session_state.imagen_cache = None
 
 # --- 8. RESULTADOS ---
 if st.session_state.busqueda_activa:
@@ -378,42 +338,38 @@ if st.session_state.busqueda_activa:
     if not supabase:
         st.error("❌ Sin conexión a base de datos.")
     else:
-        # Solo mostrar spinner si estamos procesando imagen
         with st.spinner("Localizando pieza..."):
             producto = buscar_producto_smart(busqueda)
             
             if producto:
                 # Datos básicos
-                sku_val = producto.get('item', busqueda)
+                sku_val = producto.get('item', busqueda)  # VALOR REAL DEL ITEM (SKU)
                 desc_raw = producto.get('descripcion', 'Sin descripción')
                 precio_base = float(producto.get('total_unitario', 0))
                 
-                # --- LÓGICA DE IMAGEN ---
-                # 1. ¿Tenemos imagen en BD?
+                # --- IMAGEN ---
                 url_imagen = producto.get('img_url') 
                 
-                # 2. Si no, Scraping HD
                 if not url_imagen:
                     if not st.session_state.imagen_cache:
                         url_imagen = obtener_imagen_hd(sku_val)
                         st.session_state.imagen_cache = url_imagen
-                        # GUARDAR EN BD (Self-Healing)
-                        guardar_datos_enriquecidos(producto['id'], url_imagen)
+                        
+                        # --- LLAMADA CORREGIDA: Pasamos 'sku_val' (item) ---
+                        guardar_datos_enriquecidos(sku_val, url_imagen)
                     else:
                         url_imagen = st.session_state.imagen_cache
                 
-                # --- TRADUCCIÓN (Simple) ---
-                if "ASSY" in desc_raw or "GASKET" in desc_raw or "PLATE" in desc_raw:
+                # --- TRADUCCIÓN ---
+                if any(x in desc_raw for x in ["ASSY", "GASKET", "PLATE", "SHOCK"]):
                     desc_es = traducir_texto(desc_raw)
                 else:
                     desc_es = desc_raw
                 
-                # Cálculo IVA
                 try: final_unitario = precio_base * 1.16
                 except: final_unitario = 0.0
 
                 # --- VISUALIZACIÓN ---
-                
                 if url_imagen:
                     st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
                 else:
@@ -428,7 +384,7 @@ if st.session_state.busqueda_activa:
                     
                     st.markdown("---")
                     
-                    # --- CALCULADORA DE CANTIDAD ---
+                    # --- CALCULADORA ---
                     c1, c2 = st.columns([1, 1])
                     with c1:
                         cantidad = st.number_input("Cantidad:", min_value=1, value=1, step=1)
@@ -440,7 +396,7 @@ if st.session_state.busqueda_activa:
             else:
                 st.error("❌ CÓDIGO NO ENCONTRADO")
 
-# --- 9. FOOTER LEGAL COMPLETO (RESTAURADO) ---
+# --- 9. FOOTER ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
