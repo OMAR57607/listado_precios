@@ -227,56 +227,46 @@ def traducir_texto(texto):
     except: return texto
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def obtener_imagen_hd(sku):
+def obtener_imagen_clasica(sku):
+    """
+    MOTOR DE IMÁGENES CLÁSICO (ROBUSTO)
+    Prioriza encontrar CUALQUIER imagen válida sobre la alta definición.
+    """
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
-    # ESTRATEGIA 1: PARTSOUQ
+    
+    # 1. PARTSOUQ (Método Clásico Directo)
     try:
         url = f"https://partsouq.com/en/search/all?q={sku}"
         r = requests.get(url, headers=headers, timeout=5)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
-            td_img = soup.select_one('table.table tbody tr td.cid-img')
-            if td_img:
-                link_hd = td_img.find('a')
-                if link_hd and link_hd.get('href'):
-                    src = link_hd.get('href')
+            # Buscamos directamente la imagen en la tabla, sin complicaciones
+            imgs = soup.select('table.table img')
+            for i in imgs:
+                src = i.get('src', '')
+                # Filtros de seguridad para no traer basura
+                if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
                     if src.startswith("//"): return "https:" + src
                     if src.startswith("/"): return "https://partsouq.com" + src
                     return src
-                img = td_img.find('img')
-                if img: return img.get('src')
-    except: pass
-
-    # ESTRATEGIA 2: EBAY
-    try:
-        url_ebay = f"https://www.ebay.com/sch/i.html?_nkw=toyota+{sku}&_sacat=0"
-        r = requests.get(url_ebay, headers=headers, timeout=4)
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            img_ebay = soup.select_one('.s-item__image-img')
-            if img_ebay:
-                src = img_ebay.get('src')
-                if 's-l' in src:
-                    src_hd = src.replace('s-l64', 's-l1600').replace('s-l225', 's-l1600').replace('s-l300', 's-l1600').replace('s-l400', 's-l1600').replace('s-l500', 's-l1600')
-                    return src_hd
-                return src
     except: pass
     
-    # ESTRATEGIA 3: GOOGLE
+    # 2. GOOGLE IMÁGENES (Respaldo Infalible)
     try:
         url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
-        r = requests.get(url_g, headers=headers, timeout=3)
+        r = requests.get(url_g, headers=headers, timeout=4)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             imgs = soup.find_all('img')
             for img in imgs:
                 src = img.get('src')
+                # Google a veces da base64 o urls directas, tomamos la primera válida
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
                     return src
     except: pass
+    
     return None
 
 def buscar_producto_smart(sku_usuario):
@@ -291,16 +281,11 @@ def buscar_producto_smart(sku_usuario):
     return None
 
 def guardar_datos_enriquecidos(sku_producto, img_url=None):
-    """
-    CORREGIDO: Usa explícitamente la columna 'item' (SKU) para guardar.
-    """
     if img_url:
         try:
-            # IMPORTANTE: Aquí usamos 'item' tal como está en tu tabla
             supabase.table('catalogo_toyota').update({'img_url': img_url}).eq('item', sku_producto).execute()
-            print(f"✅ Imagen guardada para SKU: {sku_producto}")
-        except Exception as e:
-            print(f"⚠️ Error guardando imagen (Check RLS): {e}")
+        except Exception:
+            pass # Silencioso para no molestar al usuario
 
 # --- 6. INTERFAZ: HEADER ---
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -338,24 +323,23 @@ if st.session_state.busqueda_activa:
     if not supabase:
         st.error("❌ Sin conexión a base de datos.")
     else:
-        with st.spinner("Localizando pieza..."):
+        with st.spinner("Consultando sistema..."):
             producto = buscar_producto_smart(busqueda)
             
             if producto:
                 # Datos básicos
-                sku_val = producto.get('item', busqueda)  # VALOR REAL DEL ITEM (SKU)
+                sku_val = producto.get('item', busqueda) 
                 desc_raw = producto.get('descripcion', 'Sin descripción')
                 precio_base = float(producto.get('total_unitario', 0))
                 
-                # --- IMAGEN ---
+                # --- IMAGEN (Lógica Restaurada) ---
                 url_imagen = producto.get('img_url') 
                 
                 if not url_imagen:
                     if not st.session_state.imagen_cache:
-                        url_imagen = obtener_imagen_hd(sku_val)
+                        # Usamos la función clásica
+                        url_imagen = obtener_imagen_clasica(sku_val)
                         st.session_state.imagen_cache = url_imagen
-                        
-                        # --- LLAMADA CORREGIDA: Pasamos 'sku_val' (item) ---
                         guardar_datos_enriquecidos(sku_val, url_imagen)
                     else:
                         url_imagen = st.session_state.imagen_cache
