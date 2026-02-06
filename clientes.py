@@ -95,7 +95,8 @@ def get_theme_by_time(date):
             "text_color": "#000000",
             "text_shadow": "none",
             "accent_color": "#eb0a1e",
-            "footer_border": "#000000"
+            "footer_border": "#000000",
+            "total_card_bg": "rgba(240, 242, 246, 0.9)" # Fondo claro para el día
         }
     elif 12 <= h < 19:
         return {
@@ -104,7 +105,8 @@ def get_theme_by_time(date):
             "text_color": "#000000",
             "text_shadow": "none",
             "accent_color": "#eb0a1e",
-            "footer_border": "#000000"
+            "footer_border": "#000000",
+            "total_card_bg": "rgba(240, 242, 246, 0.9)" # Fondo claro para la tarde
         }
     else:
         return {
@@ -120,7 +122,8 @@ def get_theme_by_time(date):
             "text_color": "#FFFFFF",
             "text_shadow": "0px 2px 4px #000000",
             "accent_color": "#ff4d4d",
-            "footer_border": "#FFFFFF"
+            "footer_border": "#FFFFFF",
+            "total_card_bg": "rgba(255, 255, 255, 0.1)" # Fondo OSCURO transparente para la noche
         }
 
 def apply_dynamic_styles():
@@ -135,6 +138,7 @@ def apply_dynamic_styles():
             --text-color: {theme['text_color']};
             --card-bg: {theme['card_bg']};
             --accent: {theme['accent_color']};
+            --total-bg: {theme['total_card_bg']};
         }}
         .stApp {{
             background-image: {theme['css_bg']} !important;
@@ -179,11 +183,11 @@ def apply_dynamic_styles():
             background-color: var(--accent) !important;
             color: white !important;
             border: 1px solid white;
-            font-weight: 800; /* Más negrita */
-            font-size: 20px; /* Letra más grande */
+            font-weight: 800;
+            font-size: 20px;
             border-radius: 8px;
             width: 100%;
-            padding: 0.8rem 1rem; /* Botón más alto */
+            padding: 0.8rem 1rem;
             transition: all 0.3s ease;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -200,28 +204,29 @@ def apply_dynamic_styles():
             letter-spacing: 1px;
         }}
         
-        /* ESTILO PARA LA TARJETA DEL TOTAL */
+        /* --- TARJETA INTELIGENTE ADAPTATIVA --- */
         .total-card {{
-            background-color: rgba(240, 242, 246, 0.95);
+            background-color: var(--total-bg); /* Fondo dinámico */
             border-left: 6px solid var(--accent);
             padding: 15px;
             border-radius: 10px;
             text-align: center;
             margin-top: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }}
         .total-label {{
             font-size: 16px;
             font-weight: bold;
-            color: #333 !important;
+            color: var(--text-color) !important; /* Texto se adapta (Blanco/Negro) */
             text-transform: uppercase;
             letter-spacing: 0.5px;
             text-shadow: none !important;
+            opacity: 0.8;
         }}
         .total-value {{
             font-size: 32px;
             font-weight: 900;
-            color: #000 !important; /* Negro intenso para diferenciar del rojo unitario */
+            color: var(--text-color) !important; /* Texto se adapta (Blanco/Negro) */
             text-shadow: none !important;
             margin-top: 5px;
         }}
@@ -264,11 +269,9 @@ def obtener_imagen_clasica(sku):
         r = requests.get(url, headers=headers, timeout=5)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
-            # Buscamos directamente la imagen en la tabla, sin complicaciones
             imgs = soup.select('table.table img')
             for i in imgs:
                 src = i.get('src', '')
-                # Filtros de seguridad para no traer basura
                 if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
                     if src.startswith("//"): return "https:" + src
                     if src.startswith("/"): return "https://partsouq.com" + src
@@ -284,7 +287,6 @@ def obtener_imagen_clasica(sku):
             imgs = soup.find_all('img')
             for img in imgs:
                 src = img.get('src')
-                # Google a veces da base64 o urls directas, tomamos la primera válida
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
                     return src
     except: pass
@@ -328,12 +330,10 @@ st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR DIGITAL
 
 # --- 7. BUSCADOR MEJORADO ---
 with st.form(key='search_form'):
-    # Botón y input ajustados
-    col_input, col_btn = st.columns([2, 2]) # Le damos más espacio al botón para que luzca
+    col_input, col_btn = st.columns([2, 2])
     with col_input:
         busqueda_input = st.text_input("SKU", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed")
     with col_btn:
-        # BOTÓN SEXY Y LLAMATIVO
         submit_btn = st.form_submit_button("🚀 CONSULTAR PRECIO 🔥", use_container_width=True)
 
 if submit_btn and busqueda_input:
@@ -391,15 +391,13 @@ if st.session_state.busqueda_activa:
                     
                     st.markdown("---")
                     
-                    # --- CALCULADORA SEXY ---
+                    # --- CALCULADORA SEXY Y ADAPTATIVA ---
                     c1, c2 = st.columns([1, 1])
                     with c1:
-                        # Espacio vertical para alinear con la tarjeta
                         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
                         cantidad = st.number_input("Cantidad:", min_value=1, value=1, step=1)
                     with c2:
                         total_calculado = final_unitario * cantidad
-                        # AQUÍ ESTÁ EL TOTALIZADOR ATRACTIVO
                         st.markdown(f"""
                         <div class="total-card">
                             <div class="total-label">Total Neto ({int(cantidad)} Pzas)</div>
