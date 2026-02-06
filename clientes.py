@@ -10,9 +10,8 @@ import pytz
 import sentry_sdk
 from supabase import create_client, Client
 
-# --- 1. CONFIGURACIÓN INICIAL (CRÍTICO: ORDEN DE EJECUCIÓN) ---
+# --- 1. CONFIGURACIÓN INICIAL ---
 
-# Función para obtener secretos de Railway o Local
 def get_secret(key):
     val = os.environ.get(key)
     if val: return val
@@ -21,7 +20,6 @@ def get_secret(key):
     except: pass
     return None
 
-# Inicialización de Sentry (Monitoreo de errores)
 sentry_dsn = get_secret("SENTRY_DSN")
 if sentry_dsn:
     try:
@@ -34,7 +32,12 @@ st.set_page_config(
     layout="centered"
 )
 
-# Definimos la hora INMEDIATAMENTE para evitar errores de variables no definidas
+# Inicializar estado de sesión para persistencia (necesario para cambiar cantidad sin perder la búsqueda)
+if 'producto_actual' not in st.session_state:
+    st.session_state.producto_actual = None
+if 'busqueda_actual' not in st.session_state:
+    st.session_state.busqueda_actual = ""
+
 try: 
     tz_cdmx = pytz.timezone('America/Mexico_City')
 except: 
@@ -43,10 +46,9 @@ except:
 def obtener_hora_mx():
     return datetime.now(tz_cdmx) if tz_cdmx else datetime.now()
 
-fecha_actual = obtener_hora_mx() # Variable global de fecha
+fecha_actual = obtener_hora_mx()
 
-# --- 2. FIX NUCLEAR PARA MÓVILES (ESTABILIDAD) ---
-# Bloquea la traducción automática de Chrome que rompe la App en Android/iOS
+# --- 2. FIX NUCLEAR PARA MÓVILES ---
 st.markdown("""
     <script>
         document.documentElement.lang = 'es';
@@ -57,7 +59,6 @@ st.markdown("""
         .goog-te-banner-frame { display: none !important; }
         .notranslate { transform: translateZ(0); }
         
-        /* Ajuste específico para que las imágenes scraped se vean bien en móvil */
         div[data-testid="stImage"] img { 
             border-radius: 12px; 
             max-height: 280px; 
@@ -82,11 +83,11 @@ try:
 except:
     supabase = None
 
-# --- 4. TEMAS VISUALES Y ESTILOS (RESTAURADO COMPLETO - ~100 LÍNEAS) ---
+# --- 4. ESTILOS MONOLÍTICOS (SIN SEPARAR ARCHIVOS) ---
 def get_theme_by_time(date):
     h = date.hour
     
-    # 🌅 MAÑANA (6 AM - 12 PM): Amanecer Limpio
+    # 🌅 MAÑANA (6 AM - 12 PM)
     if 6 <= h < 12:
         return {
             "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
@@ -97,7 +98,7 @@ def get_theme_by_time(date):
             "footer_border": "#000000"
         }
     
-    # ☀️ TARDE (12 PM - 7 PM): Día Soleado (Alto Contraste)
+    # ☀️ TARDE (12 PM - 7 PM)
     elif 12 <= h < 19:
         return {
             "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
@@ -108,7 +109,7 @@ def get_theme_by_time(date):
             "footer_border": "#000000"
         }
     
-    # 🌌 NOCHE (7 PM - 6 AM): Cielo Estrellado "Natural"
+    # 🌌 NOCHE (7 PM - 6 AM)
     else:
         return {
             "css_bg": """
@@ -135,21 +136,18 @@ def apply_dynamic_styles():
     
     st.markdown(f"""
         <style>
-        /* --- VARIABLES GLOBALES --- */
         :root {{
             --text-color: {theme['text_color']};
             --card-bg: {theme['card_bg']};
             --accent: {theme['accent_color']};
         }}
 
-        /* 1. FONDO DE PANTALLA (DINÁMICO) */
         .stApp {{
             background-image: {theme['css_bg']} !important;
             {bg_extra_css}
             background-attachment: fixed;
         }}
         
-        /* 2. TARJETA CENTRAL (CONTENEDOR) */
         [data-testid="stBlockContainer"] {{
             background-color: var(--card-bg) !important;
             border-radius: 15px;
@@ -160,14 +158,13 @@ def apply_dynamic_styles():
             border: 1px solid rgba(128,128,128, 0.3);
         }}
 
-        /* 3. TIPOGRAFÍA GLOBAL */
         h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
             color: var(--text-color) !important;
             text-shadow: {theme['text_shadow']} !important;
             font-family: sans-serif;
         }}
         
-        /* 4. INPUT (CAMPO DE TEXTO GRANDE) */
+        /* INPUT MEJORADO */
         .stTextInput input {{
             background-color: #ffffff !important;
             color: #000000 !important;
@@ -180,10 +177,10 @@ def apply_dynamic_styles():
             padding: 10px !important;
         }}
         
-        /* 5. PRECIO GRANDE Y LLAMATIVO */
+        /* PRECIO GRANDE */
         .big-price {{
             color: var(--accent) !important;
-            font-size: clamp(50px, 15vw, 100px); 
+            font-size: clamp(40px, 12vw, 80px); 
             font-weight: 900;
             text-align: center;
             line-height: 1.1;
@@ -191,7 +188,7 @@ def apply_dynamic_styles():
             text-shadow: 2px 2px 0px black !important;
         }}
 
-        /* 6. BOTÓN CONSULTAR (ROBUSTO) */
+        /* BOTÓN CONSULTAR */
         .stButton button {{
             background-color: var(--accent) !important;
             color: white !important;
@@ -208,7 +205,7 @@ def apply_dynamic_styles():
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }}
         
-        /* 7. VISUALIZACIÓN SKU (NÚMERO DE PARTE) */
+        /* SKU */
         .sku-display {{
             font-size: 32px !important;
             font-weight: 900 !important;
@@ -216,10 +213,18 @@ def apply_dynamic_styles():
             letter-spacing: 1px;
         }}
         
-        /* 8. OCULTAR ELEMENTOS DE STREAMLIT */
+        /* METRICAS (CANTIDAD Y TOTAL) */
+        [data-testid="stMetricLabel"] {{
+            font-weight: bold;
+            font-size: 16px;
+        }}
+        [data-testid="stMetricValue"] {{
+            font-size: 24px;
+            color: var(--accent) !important;
+        }}
+        
         #MainMenu, footer, header {{visibility: hidden;}}
         
-        /* 9. FOOTER LEGAL (DIVISOR ADAPTABLE) */
         .legal-footer {{
             border-top: 1px solid {theme['footer_border']} !important;
             opacity: 0.9;
@@ -232,10 +237,9 @@ def apply_dynamic_styles():
         </style>
     """, unsafe_allow_html=True)
 
-# Aplicamos los estilos inmediatamente
 apply_dynamic_styles()
 
-# --- 5. FUNCIONES DE LÓGICA DE NEGOCIO ---
+# --- 5. LÓGICA DE NEGOCIO Y "SELF-HEALING" ---
 
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
@@ -243,154 +247,197 @@ def traducir_texto(texto):
     except: return texto
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def obtener_imagen_google_fallback(sku):
-    """
-    PLAN B: Buscar thumbnail en Google Imágenes si PartSouq falla.
-    Extrae la primera imagen válida de los resultados de búsqueda.
-    """
-    try:
-        url = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
-        # User-Agent de PC estándar para Google
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-        
-        r = requests.get(url, headers=headers, timeout=3)
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            imgs = soup.find_all('img')
-            for img in imgs:
-                src = img.get('src')
-                # Google suele usar thumbnails encriptados (encrypted-tbn0) o urls directas
-                if src and src.startswith('http') and 'encrypted-tbn0' in src:
-                    return src
-    except: pass
-    return None
-
-@st.cache_data(ttl=3600, show_spinner=False) 
 def obtener_imagen_remota(sku):
-    """
-    MOTOR HÍBRIDO DE IMÁGENES:
-    1. Intenta en PartSouq (Catálogo Global)
-    2. Si falla o bloquean, usa Google Images como respaldo.
-    """
+    # Intentar PartSouq
     headers = {
-        # Simulamos un iPhone moderno para pasar desapercibidos
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "es-MX,es;q=0.9"
     }
-    
-    # 1. INTENTO PRINCIPAL: PARTSOUQ
     try:
-        # Usamos el link actualizado que proporcionaste
         url = f"https://partsouq.com/en/search/all?q={sku}"
         r = requests.get(url, headers=headers, timeout=5)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
-            # Buscamos en la tabla de resultados
             imgs = soup.select('table.table img')
             for i in imgs:
                 src = i.get('src', '')
-                # Filtramos iconos de sistema o placeholders
                 if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
                     if src.startswith("//"): return "https:" + src
                     if src.startswith("/"): return "https://partsouq.com" + src
                     return src
     except: pass
     
-    # 2. PLAN B: GOOGLE IMÁGENES (Respaldo robusto)
-    return obtener_imagen_google_fallback(sku)
-
-def buscar_producto_supabase(sku_usuario):
-    if not supabase: return None
-    sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
+    # Fallback Google
     try:
-        # Búsqueda principal (sin guiones)
-        response = supabase.table('catalogo_toyota').select("*").ilike('item', sku_limpio).execute()
-        if response.data: return response.data[0]
-        # Búsqueda secundaria (con guiones, por si acaso)
-        if '-' in sku_usuario:
-             response2 = supabase.table('catalogo_toyota').select("*").ilike('item', sku_usuario.strip().upper()).execute()
-             if response2.data: return response2.data[0]
+        url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
+        headers_g = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        r = requests.get(url_g, headers=headers_g, timeout=3)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            imgs = soup.find_all('img')
+            for img in imgs:
+                src = img.get('src')
+                if src and src.startswith('http') and 'encrypted-tbn0' in src:
+                    return src
     except: pass
     return None
 
-# --- 6. INTERFAZ: ENCABEZADO (FECHA ARRIBA) ---
+def buscar_producto_optimizado(sku_usuario):
+    """
+    Usa la nueva columna 'sku_search' para búsqueda ultra-rápida.
+    """
+    if not supabase: return None
+    
+    # 1. Limpieza CRÍTICA del input (Normalización)
+    sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
+    
+    try:
+        # Intento 1: Búsqueda rápida indexada (Requiere haber corrido el SQL)
+        response = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_limpio).execute()
+        if response.data: return response.data[0]
+        
+        # Intento 2: Fallback por si no han corrido el SQL aún (más lento)
+        response_legacy = supabase.table('catalogo_toyota').select("*").ilike('item', sku_limpio).execute()
+        if response_legacy.data: return response_legacy.data[0]
+        
+    except Exception as e:
+        # Si falla todo, retorno None
+        pass
+    return None
+
+def actualizar_cache_base_datos(id_producto, nueva_desc=None, nueva_img=None):
+    """
+    Self-Healing: Intenta guardar los datos enriquecidos en Supabase
+    para que la próxima vez sea instantáneo. Falla en silencio si no hay permisos.
+    """
+    updates = {}
+    if nueva_desc: updates['descripcion'] = nueva_desc # O 'desc_es' si creas la columna
+    if nueva_img: updates['img_url'] = nueva_img       # Requiere crear columna 'img_url'
+    
+    if updates:
+        try:
+            supabase.table('catalogo_toyota').update(updates).eq('id', id_producto).execute()
+        except:
+            pass # No bloqueamos al usuario si falla el update
+
+# --- 6. INTERFAZ GRÁFICA ---
+
+# Header
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    # 1. Fecha y Hora (Arriba, centrado)
     st.markdown(f"""
     <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 5px;">
         LOS FUERTES<br>
         {fecha_actual.strftime("%d/%m/%Y")} - {fecha_actual.strftime("%H:%M")}
     </div>
     """, unsafe_allow_html=True)
-    
-    # 2. Logotipo (Abajo)
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True) 
     else:
         st.markdown("<h1 style='text-align: center;'>TOYOTA</h1>", unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown("<h3 style='text-align: center; font-weight: 800;'>VERIFICADOR DE PRECIOS</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR RÁPIDO</h3>", unsafe_allow_html=True)
 
-busqueda = st.text_input("Ingresa SKU:", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed").strip()
-btn = st.button("🔍 CONSULTAR PRECIO")
+# FORMULARIO DE BÚSQUEDA (Mejora UX Móvil)
+# Usar st.form permite que el teclado del celular envíe el formulario con "Enter/Ir"
+with st.form(key='search_form'):
+    col_input, col_btn = st.columns([3, 1])
+    with col_input:
+        busqueda_input = st.text_input("SKU", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed")
+    with col_btn:
+        submit_btn = st.form_submit_button("🔍")
 
-# --- 7. RESULTADOS Y LÓGICA ---
-if busqueda or btn:
+# LÓGICA DE PERSISTENCIA
+# Si se presiona el botón, actualizamos el estado. 
+if submit_btn and busqueda_input:
+    st.session_state.busqueda_actual = busqueda_input
+    # Reseteamos cantidad al buscar nuevo producto
+    st.session_state.cantidad_sel = 1 
+
+# --- 7. PROCESAMIENTO Y RESULTADOS ---
+if st.session_state.busqueda_actual:
+    busqueda = st.session_state.busqueda_actual
+    
     if not supabase:
-        st.error("❌ Sin conexión a base de datos.")
+        st.error("❌ Error de conexión DB.")
     else:
-        # Aviso estático (Sin animación para evitar crash en móvil)
-        aviso = st.empty()
-        aviso.info("⏳ Consultando sistema...")
-        
-        producto = buscar_producto_supabase(busqueda)
-        url_imagen = obtener_imagen_remota(busqueda)
-        
-        aviso.empty() # Limpiamos el aviso
+        # Solo mostramos spinner si es una búsqueda nueva (opcional)
+        with st.spinner("Consultando..."):
+            # Buscar en DB
+            producto = buscar_producto_optimizado(busqueda)
+            
+            if producto:
+                # --- Preparación de Datos ---
+                sku_val = producto.get('item', busqueda)
+                desc_raw = producto.get('descripcion', 'Sin descripción')
+                precio_base = float(producto.get('total_unitario', 0))
+                
+                # Gestión Inteligente de Imagen y Texto
+                # 1. Imagen: Si ya la tuviéramos en DB la usamos, si no, scraping
+                url_imagen = producto.get('img_url') # Requiere columna nueva
+                if not url_imagen:
+                    url_imagen = obtener_imagen_remota(sku_val)
+                
+                # 2. Traducción
+                # Si detectamos que la descripción está en inglés (heurística simple), traducimos
+                if "ASSY" in desc_raw or "GASKET" in desc_raw:
+                    desc_es = traducir_texto(desc_raw)
+                else:
+                    desc_es = desc_raw
+                
+                # Intentamos guardar lo que encontramos (Self-Healing)
+                # actualizar_cache_base_datos(producto['id'], nueva_desc=desc_es, nueva_img=url_imagen)
+                
+                try: final_unitario = precio_base * 1.16
+                except: final_unitario = 0.0
 
-        if producto:
-            sku_val = producto.get('item', busqueda)
-            desc = producto.get('descripcion', 'Sin descripción')
-            precio = producto.get('total_unitario', 0)
-            desc_es = traducir_texto(desc)
-            
-            try: final = float(precio) * 1.16
-            except: final = 0.0
-            
-            # 1. IMAGEN (Referencial)
-            if url_imagen:
-                st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
+                # --- VISUALIZACIÓN ---
+                
+                # 1. Imagen
+                if url_imagen:
+                    st.image(url_imagen, caption="Referencia Visual", use_container_width=True)
+                else:
+                    st.info("📷 Sin imagen disponible.")
+
+                # 2. Datos Principales
+                st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 15px;'>{desc_es}</div>", unsafe_allow_html=True)
+                
+                # 3. PRECIO UNITARIO
+                if final_unitario > 0:
+                    st.markdown(f"<div class='big-price'>${final_unitario:,.2f}</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='text-align: center; font-size: 12px; margin-bottom: 20px;'>Precio Unitario (IVA Incluido)</div>", unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+                    
+                    # 4. NUEVO: CALCULADORA DE CANTIDAD
+                    # Usamos columnas para que se vea ordenado
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        cantidad = st.number_input("Cantidad:", min_value=1, value=1, step=1, key="cantidad_input")
+                    with c2:
+                        total_calculado = final_unitario * cantidad
+                        st.metric("Total a Pagar", f"${total_calculado:,.2f}")
+                        
+                else:
+                    st.warning("Precio no disponible en sistema.")
+                    
             else:
-                st.info("📷 Imagen no disponible digitalmente.")
-                # Opción manual para el usuario si todo falla
-                st.link_button("🔎 Ver en Google Imágenes", f"https://www.google.com/search?tbm=isch&q=toyota+{busqueda}")
+                st.error(f"❌ '{busqueda}' NO ENCONTRADO")
+                st.markdown("Verifica que el código sea correcto.")
 
-            # 2. DATOS
-            st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
-            
-            if final > 0:
-                st.markdown(f"<div class='big-price'>${final:,.2f}</div>", unsafe_allow_html=True)
-                st.markdown("<div style='text-align: center; font-size: 14px; font-weight: bold;'>Precio Neto (IVA Incluido). M.N.</div>", unsafe_allow_html=True)
-            else:
-                st.warning("Precio no disponible.")
-        else:
-            st.error("❌ CÓDIGO NO ENCONTRADO")
-
-# --- 8. FOOTER LEGAL COMPLETO (RESTAURADO) ---
+# --- 8. FOOTER LEGAL ---
 st.markdown("---")
 st.markdown(f"""
 <div class="legal-footer">
-    <strong>INFORMACIÓN COMERCIAL Y MARCO LEGAL</strong><br>
-    La información de precios mostrada en este verificador digital cumple estrictamente con las disposiciones legales vigentes en los Estados Unidos Mexicanos:
+    <strong>INFORMACIÓN COMERCIAL</strong><br>
+    Precios en Moneda Nacional (MXN) incluyen 16% de IVA.
     <br><br>
-    <strong>1. PRECIO TOTAL A PAGAR (LFPC Art. 7 Bis):</strong> En cumplimiento con la Ley Federal de Protección al Consumidor, el precio exhibido representa el monto final e inequívoco a pagar por el consumidor. Este importe incluye el costo del producto, el Impuesto al Valor Agregado (IVA del 16%) y cualquier cargo administrativo aplicable, evitando prácticas comerciales engañosas.
+    <strong>1. PRECIO TOTAL (LFPC Art. 7 Bis):</strong> El monto exhibido es el precio final a pagar por unidad o por el total calculado.
     <br><br>
-    <strong>2. VIGENCIA Y EXACTITUD (NOM-174-SCFI-2007):</strong> El precio mostrado es válido exclusivamente al momento de la consulta (Timbre digital: <strong>{fecha_actual.strftime("%d/%m/%Y %H:%M:%S")}</strong>). Toyota Los Fuertes garantiza el respeto al precio exhibido al momento de la transacción conforme a lo dispuesto en las Normas Oficiales Mexicanas sobre prácticas comerciales en transacciones electrónicas y de información.
+    <strong>2. VIGENCIA:</strong> Válido al momento de la consulta: <strong>{fecha_actual.strftime("%d/%m/%Y %H:%M:%S")}</strong>.
     <br><br>
-    <strong>3. INFORMACIÓN COMERCIAL (NOM-050-SCFI-2004):</strong> La descripción y especificaciones de las partes cumplen con los requisitos de información comercial general para productos destinados a consumidores en el territorio nacional. Las imágenes mostradas son ilustrativas y provienen de catálogos internacionales (PartSouq / Google), pueden diferir del producto real.
+    <strong>3. IMÁGENES:</strong> Las ilustraciones son referenciales (Catálogos internacionales) y pueden diferir del producto físico.
 </div>
 """, unsafe_allow_html=True)
