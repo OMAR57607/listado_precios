@@ -39,6 +39,9 @@ if 'busqueda_activa' not in st.session_state:
     st.session_state.busqueda_activa = ""
 if 'imagen_cache' not in st.session_state:
     st.session_state.imagen_cache = None
+# Inicializar input para poder borrarlo
+if 'sku_input' not in st.session_state:
+    st.session_state.sku_input = ""
 
 try: 
     tz_cdmx = pytz.timezone('America/Mexico_City')
@@ -270,6 +273,7 @@ apply_dynamic_styles()
 
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
+    # Traducción directa sin filtros
     try: return GoogleTranslator(source='auto', target='es').translate(texto)
     except: return texto
 
@@ -344,26 +348,23 @@ st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR DIGITAL
 
 # --- 7. BUSCADOR ADAPTATIVO CON LIMPIEZA ---
 
-# Callback para borrar el texto
 def limpiar_busqueda():
     st.session_state.sku_input = ""
     st.session_state.busqueda_activa = ""
+    st.session_state.producto_actual = None
 
 with st.form(key='search_form'):
-    # Layout responsivo: Input grande, Buscar mediano, Basura pequeño
     c_input, c_search, c_clear = st.columns([3, 1.5, 0.7])
     
     with c_input:
-        # Vinculamos el input a session_state con 'key'
+        # Vinculamos input con session_state para poder borrarlo
         busqueda_input = st.text_input("SKU", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed", key="sku_input")
         
     with c_search:
-        # Type="primary" activa el estilo Rojo Toyota definido en CSS
         submit_btn = st.form_submit_button("BUSCAR 🔍", type="primary", use_container_width=True)
         
     with c_clear:
-        # Type="secondary" activa el estilo Gris/Blanco. 
-        # on_click ejecuta la limpieza.
+        # Botón gris de limpieza
         clear_btn = st.form_submit_button("🗑️", type="secondary", use_container_width=True, on_click=limpiar_busqueda)
 
 if submit_btn and busqueda_input:
@@ -394,10 +395,8 @@ if st.session_state.busqueda_activa:
                     else:
                         url_imagen = st.session_state.imagen_cache
                 
-                if any(x in desc_raw for x in ["ASSY", "GASKET", "PLATE", "SHOCK"]):
-                    desc_es = traducir_texto(desc_raw)
-                else:
-                    desc_es = desc_raw
+                # --- TRADUCCIÓN OBLIGATORIA (Sin condiciones) ---
+                desc_es = traducir_texto(desc_raw)
                 
                 try: final_unitario = precio_base * 1.16
                 except: final_unitario = 0.0
