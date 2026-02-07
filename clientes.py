@@ -4,7 +4,6 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-# Librería para la traducción automática (NOM-050)
 from deep_translator import GoogleTranslator
 import pytz
 import sentry_sdk
@@ -32,14 +31,13 @@ st.set_page_config(
     layout="centered"
 )
 
-# Inicializar estado de sesión
+# Inicializar estado
 if 'producto_actual' not in st.session_state:
     st.session_state.producto_actual = None
 if 'busqueda_activa' not in st.session_state:
     st.session_state.busqueda_activa = ""
 if 'imagen_cache' not in st.session_state:
     st.session_state.imagen_cache = None
-# Inicializar input para poder borrarlo
 if 'sku_input' not in st.session_state:
     st.session_state.sku_input = ""
 
@@ -53,7 +51,7 @@ def obtener_hora_mx():
 
 fecha_actual = obtener_hora_mx()
 
-# --- 2. FIX NUCLEAR PARA MÓVILES ---
+# --- 2. ESTILOS UNIVERSALES (FUNCIONAN EN CUALQUIER DISPOSITIVO) ---
 st.markdown("""
     <script>
         document.documentElement.lang = 'es';
@@ -64,13 +62,19 @@ st.markdown("""
         .goog-te-banner-frame { display: none !important; }
         .notranslate { transform: translateZ(0); }
         
+        /* FIX DE IMAGEN: Fondo blanco para que no se vea parche en modo oscuro */
+        div[data-testid="stImage"] {
+            background-color: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
         div[data-testid="stImage"] img { 
-            border-radius: 12px; 
-            max-height: 320px; 
+            max-height: 300px; 
             object-fit: contain; 
             margin: auto;
             display: block;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -142,7 +146,7 @@ def apply_dynamic_styles():
             --card-bg: {theme['card_bg']};
             --accent: {theme['accent_color']};
             --total-bg: {theme['total_card_bg']};
-            color-scheme: light; /* Fuerza modo claro en inputs */
+            color-scheme: light; /* OBLIGATORIO: Fuerza colores claros en controles */
         }}
         
         .stApp {{
@@ -167,16 +171,24 @@ def apply_dynamic_styles():
             font-family: sans-serif;
         }}
         
-        /* INPUT GIGANTE */
+        /* INPUT DE TEXTO - CORRECCIÓN TOTAL DE CONTRASTE */
         .stTextInput input {{
             background-color: #ffffff !important;
             color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important; /* Fix para Safari/iPhone */
+            caret-color: #eb0a1e;
             font-weight: 900 !important;
             font-size: 24px !important;
-            border: 4px solid var(--accent) !important;
+            border: 3px solid var(--accent) !important;
             text-align: center !important;
             border-radius: 12px;
             padding: 12px !important;
+        }}
+        /* Color del texto de ayuda (placeholder) */
+        .stTextInput input::placeholder {{
+            color: #aaaaaa !important;
+            -webkit-text-fill-color: #aaaaaa !important;
+            opacity: 1;
         }}
         
         .big-price {{
@@ -189,39 +201,31 @@ def apply_dynamic_styles():
             text-shadow: 2px 2px 0px black !important;
         }}
         
-        /* --- BOTÓN PRIMARIO (BUSCAR) - ESTILO BLINDADO --- */
-        /* Eliminamos apariencia nativa para que iPhone/Android no lo cambien */
+        /* --- BOTÓN ROJO (BUSCAR) --- */
         button[kind="primary"] {{
-            appearance: none !important;
-            -webkit-appearance: none !important;
             background-color: #eb0a1e !important;
             color: #ffffff !important;
-            border: 2px solid white !important; /* Borde blanco para resaltar en negro */
+            border: 2px solid white !important;
             font-weight: 900 !important;
             font-size: 18px !important;
             border-radius: 10px !important;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-            transition: transform 0.1s;
-            height: 55px !important; /* Altura fija para alineación */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+            height: 55px !important;
+            width: 100% !important;
         }}
-        button[kind="primary"]:active {{
-            transform: scale(0.96);
-            background-color: #cc0000 !important;
-        }}
+        button[kind="primary"]:active {{ transform: scale(0.98); }}
         
-        /* --- BOTÓN SECUNDARIO (LIMPIAR) --- */
+        /* --- BOTÓN GRIS (LIMPIAR) --- */
         button[kind="secondary"] {{
-            appearance: none !important;
-            -webkit-appearance: none !important;
-            background-color: #f0f2f6 !important;
-            color: #31333F !important;
-            border: 2px solid #ccc !important;
+            background-color: #e0e0e0 !important;
+            color: #333333 !important;
+            border: 2px solid #999 !important;
             font-weight: 900 !important;
-            font-size: 22px !important;
+            font-size: 24px !important; /* Ícono más grande */
             border-radius: 10px !important;
             height: 55px !important;
+            width: 100% !important;
         }}
         button[kind="secondary"]:hover {{
             border-color: #eb0a1e !important;
@@ -266,14 +270,12 @@ def apply_dynamic_styles():
         </style>
     """, unsafe_allow_html=True)
 
-
 apply_dynamic_styles()
 
 # --- 5. LÓGICA DE NEGOCIO ---
 
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
-    # Traducción directa sin filtros
     try: return GoogleTranslator(source='auto', target='es').translate(texto)
     except: return texto
 
@@ -296,7 +298,6 @@ def obtener_imagen_clasica(sku):
                     if src.startswith("/"): return "https://partsouq.com" + src
                     return src
     except: pass
-    
     # 2. GOOGLE
     try:
         url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
@@ -346,7 +347,7 @@ with col2:
 st.markdown("---")
 st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR DIGITAL</h3>", unsafe_allow_html=True)
 
-# --- 7. BUSCADOR ADAPTATIVO CON LIMPIEZA ---
+# --- 7. BUSCADOR ADAPTATIVO (Layout: Input Grande | Buscar | Limpiar Pequeño) ---
 
 def limpiar_busqueda():
     st.session_state.sku_input = ""
@@ -354,17 +355,18 @@ def limpiar_busqueda():
     st.session_state.producto_actual = None
 
 with st.form(key='search_form'):
-    c_input, c_search, c_clear = st.columns([3, 1.5, 0.7])
+    # Layout Proporcional: 3 partes Input, 1.2 partes Buscar, 0.5 partes Basura
+    c_input, c_search, c_clear = st.columns([3, 1.2, 0.5], gap="small")
     
     with c_input:
-        # Vinculamos input con session_state para poder borrarlo
         busqueda_input = st.text_input("SKU", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed", key="sku_input")
         
     with c_search:
+        # Botón Rojo
         submit_btn = st.form_submit_button("BUSCAR 🔍", type="primary", use_container_width=True)
         
     with c_clear:
-        # Botón gris de limpieza
+        # Botón Gris (Basura)
         clear_btn = st.form_submit_button("🗑️", type="secondary", use_container_width=True, on_click=limpiar_busqueda)
 
 if submit_btn and busqueda_input:
@@ -395,7 +397,7 @@ if st.session_state.busqueda_activa:
                     else:
                         url_imagen = st.session_state.imagen_cache
                 
-                # --- TRADUCCIÓN OBLIGATORIA (Sin condiciones) ---
+                # Traducción forzosa
                 desc_es = traducir_texto(desc_raw)
                 
                 try: final_unitario = precio_base * 1.16
