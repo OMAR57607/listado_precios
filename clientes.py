@@ -8,7 +8,6 @@ from deep_translator import GoogleTranslator
 import pytz
 import sentry_sdk
 from supabase import create_client, Client
-import gc # <--- ÚNICA LIBRERÍA NUEVA NECESARIA
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 
@@ -52,7 +51,7 @@ def obtener_hora_mx():
 
 fecha_actual = obtener_hora_mx()
 
-# --- 2. ESTILOS UNIVERSALES ---
+# --- 2. ESTILOS UNIVERSALES (FUNCIONAN EN CUALQUIER DISPOSITIVO) ---
 st.markdown("""
     <script>
         document.documentElement.lang = 'es';
@@ -63,6 +62,7 @@ st.markdown("""
         .goog-te-banner-frame { display: none !important; }
         .notranslate { transform: translateZ(0); }
         
+        /* FIX DE IMAGEN: Fondo blanco para que no se vea parche en modo oscuro */
         div[data-testid="stImage"] {
             background-color: white;
             padding: 15px;
@@ -79,7 +79,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. CONEXIÓN A SUPABASE (TU VERSIÓN ORIGINAL QUE SÍ FUNCIONA) ---
+# --- 3. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
     url = get_secret("SUPABASE_URL")
@@ -146,7 +146,7 @@ def apply_dynamic_styles():
             --card-bg: {theme['card_bg']};
             --accent: {theme['accent_color']};
             --total-bg: {theme['total_card_bg']};
-            color-scheme: light;
+            color-scheme: light; /* OBLIGATORIO: Fuerza colores claros en controles */
         }}
         
         .stApp {{
@@ -171,10 +171,11 @@ def apply_dynamic_styles():
             font-family: sans-serif;
         }}
         
+        /* INPUT DE TEXTO - CORRECCIÓN TOTAL DE CONTRASTE */
         .stTextInput input {{
             background-color: #ffffff !important;
             color: #000000 !important;
-            -webkit-text-fill-color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important; /* Fix para Safari/iPhone */
             caret-color: #eb0a1e;
             font-weight: 900 !important;
             font-size: 24px !important;
@@ -183,6 +184,7 @@ def apply_dynamic_styles():
             border-radius: 12px;
             padding: 12px !important;
         }}
+        /* Color del texto de ayuda (placeholder) */
         .stTextInput input::placeholder {{
             color: #aaaaaa !important;
             -webkit-text-fill-color: #aaaaaa !important;
@@ -199,6 +201,7 @@ def apply_dynamic_styles():
             text-shadow: 2px 2px 0px black !important;
         }}
         
+        /* --- BOTÓN ROJO (BUSCAR) --- */
         button[kind="primary"] {{
             background-color: #eb0a1e !important;
             color: #ffffff !important;
@@ -213,12 +216,13 @@ def apply_dynamic_styles():
         }}
         button[kind="primary"]:active {{ transform: scale(0.98); }}
         
+        /* --- BOTÓN GRIS (LIMPIAR) --- */
         button[kind="secondary"] {{
             background-color: #e0e0e0 !important;
             color: #333333 !important;
             border: 2px solid #999 !important;
             font-weight: 900 !important;
-            font-size: 24px !important;
+            font-size: 24px !important; /* Ícono más grande */
             border-radius: 10px !important;
             height: 55px !important;
             width: 100% !important;
@@ -228,6 +232,7 @@ def apply_dynamic_styles():
             color: #eb0a1e !important;
         }}
 
+        /* TARJETA TOTAL */
         .total-card {{
             background-color: var(--total-bg);
             border-left: 6px solid var(--accent);
@@ -269,16 +274,11 @@ apply_dynamic_styles()
 
 # --- 5. LÓGICA DE NEGOCIO ---
 
-# [OPTIMIZACIÓN] Cacheamos para no crear objetos repetidos y limpiamos RAM
 @st.cache_data(show_spinner=False)
 def traducir_texto(texto):
-    try: 
-        res = GoogleTranslator(source='auto', target='es').translate(texto)
-        gc.collect() # Limpieza forzosa
-        return res
+    try: return GoogleTranslator(source='auto', target='es').translate(texto)
     except: return texto
 
-# [OPTIMIZACIÓN] Cacheamos para no volver a descargar la imagen si ya la tenemos
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_imagen_clasica(sku):
     headers = {
@@ -291,23 +291,13 @@ def obtener_imagen_clasica(sku):
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             imgs = soup.select('table.table img')
-            src_encontrado = None
             for i in imgs:
                 src = i.get('src', '')
                 if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
-                    if src.startswith("//"): src_encontrado = "https:" + src
-                    elif src.startswith("/"): src_encontrado = "https://partsouq.com" + src
-                    else: src_encontrado = src
-                    break
-            
-            # [OPTIMIZACIÓN CLAVE] Destruir el objeto pesado de scraping
-            del soup
-            gc.collect()
-            
-            if src_encontrado: return src_encontrado
-
+                    if src.startswith("//"): return "https:" + src
+                    if src.startswith("/"): return "https://partsouq.com" + src
+                    return src
     except: pass
-    
     # 2. GOOGLE
     try:
         url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
@@ -315,26 +305,14 @@ def obtener_imagen_clasica(sku):
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             imgs = soup.find_all('img')
-            src_encontrado = None
             for img in imgs:
                 src = img.get('src')
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
-                    src_encontrado = src
-                    break
-            
-            # [OPTIMIZACIÓN CLAVE]
-            del soup
-            gc.collect()
-            
-            if src_encontrado: return src_encontrado
+                    return src
     except: pass
-    
     return None
 
-# [OPTIMIZACIÓN] Cacheamos esta función para que si cambias la cantidad NO vuelva a ir a la BD
-@st.cache_data(ttl=600, show_spinner=False)
-def buscar_producto_smart_cached(sku_usuario):
-    # Esta es tu lógica exacta, solo envuelta en cache
+def buscar_producto_smart(sku_usuario):
     if not supabase: return None
     sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
     try:
@@ -346,7 +324,7 @@ def buscar_producto_smart_cached(sku_usuario):
     return None
 
 def guardar_datos_enriquecidos(sku_producto, img_url=None):
-    if img_url and supabase: # Pequeña protección extra
+    if img_url:
         try:
             supabase.table('catalogo_toyota').update({'img_url': img_url}).eq('item', sku_producto).execute()
         except Exception:
@@ -369,7 +347,7 @@ with col2:
 st.markdown("---")
 st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR DIGITAL</h3>", unsafe_allow_html=True)
 
-# --- 7. BUSCADOR ADAPTATIVO ---
+# --- 7. BUSCADOR ADAPTATIVO (Layout: Input Grande | Buscar | Limpiar Pequeño) ---
 
 def limpiar_busqueda():
     st.session_state.sku_input = ""
@@ -377,12 +355,18 @@ def limpiar_busqueda():
     st.session_state.producto_actual = None
 
 with st.form(key='search_form'):
+    # Layout Proporcional: 3 partes Input, 1.2 partes Buscar, 0.5 partes Basura
     c_input, c_search, c_clear = st.columns([3, 1.2, 0.5], gap="small")
+    
     with c_input:
         busqueda_input = st.text_input("SKU", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed", key="sku_input")
+        
     with c_search:
+        # Botón Rojo
         submit_btn = st.form_submit_button("BUSCAR 🔍", type="primary", use_container_width=True)
+        
     with c_clear:
+        # Botón Gris (Basura)
         clear_btn = st.form_submit_button("🗑️", type="secondary", use_container_width=True, on_click=limpiar_busqueda)
 
 if submit_btn and busqueda_input:
@@ -397,8 +381,7 @@ if st.session_state.busqueda_activa:
         st.error("❌ Sin conexión a base de datos.")
     else:
         with st.spinner("Consultando sistema..."):
-            # Usamos la función con CACHÉ para evitar llamadas repetidas al cambiar cantidad
-            producto = buscar_producto_smart_cached(busqueda)
+            producto = buscar_producto_smart(busqueda)
             
             if producto:
                 sku_val = producto.get('item', busqueda) 
@@ -414,6 +397,7 @@ if st.session_state.busqueda_activa:
                     else:
                         url_imagen = st.session_state.imagen_cache
                 
+                # Traducción forzosa
                 desc_es = traducir_texto(desc_raw)
                 
                 try: final_unitario = precio_base * 1.16
