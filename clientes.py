@@ -8,6 +8,7 @@ from deep_translator import GoogleTranslator
 import pytz
 import sentry_sdk
 from supabase import create_client, Client
+import gc # OPTIMIZACIÓN DE MEMORIA
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 
@@ -272,56 +273,7 @@ def apply_dynamic_styles():
 
 apply_dynamic_styles()
 
-# --- 5. LÓGICA DE NEGOCIO ---
-
-@st.cache_data(show_spinner=False)
-def traducir_texto(texto):
-    try: return GoogleTranslator(source='auto', target='es').translate(texto)
-    except: return texto
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def obtener_imagen_clasica(sku):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    # 1. PARTSOUQ
-    try:
-        url = f"https://partsouq.com/en/search/all?q={sku}"
-        r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            imgs = soup.select('table.table img')
-            for i in imgs:
-                src = i.get('src', '')
-                if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
-                    if src.startswith("//"): return "https:" + src
-                    if src.startswith("/"): return "https://partsouq.com" + src
-                    return src
-    except: pass
-    # 2. GOOGLE
-    try:
-        url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
-        r = requests.get(url_g, headers=headers, timeout=4)
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            imgs = soup.find_all('img')
-            for img in imgs:
-                src = img.get('src')
-                if src and src.startswith('http') and 'encrypted-tbn0' in src:
-                    return src
-    except: pass
-    return None
-
-def buscar_producto_smart(sku_usuario):
-    if not supabase: return None
-    sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
-    try:
-        response = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_limpio).execute()
-        if response.data: return response.data[0]
-        response_legacy = supabase.table('catalogo_toyota').select("*").ilike('item', sku_limpio).execute()
-        if response_legacy.data: return response_legacy.data[0]
-    except: pass
-    return None
+# --- 5. LÓGICA DE NEGOCIO OPTIMIZADA ---
 
 def guardar_datos_enriquecidos(sku_producto, img_url=None):
     if img_url:
@@ -329,6 +281,90 @@ def guardar_datos_enriquecidos(sku_producto, img_url=None):
             supabase.table('catalogo_toyota').update({'img_url': img_url}).eq('item', sku_producto).execute()
         except Exception:
             pass 
+
+@st.cache_data(ttl=3600, show_spinner="Cargando catálogo maestro...")
+def cargar_catalogo_completo():
+    """
+    Descarga TODO el catálogo de una vez y lo mantiene en memoria.
+    Esto evita conectar a Supabase en cada clic.
+    """
+    if not supabase: return pd.DataFrame()
+    
+    # Traemos solo lo necesario para ahorrar memoria
+    try:
+        response = supabase.table('catalogo_toyota').select("item, descripcion, total_unitario, sku_search, img_url").execute()
+        df = pd.DataFrame(response.data)
+        
+        if not df.empty:
+            # OPTIMIZACIÓN DE MEMORIA (Vital para aplanar la gráfica)
+            # 1. Convertir a mayúsculas y limpiar una sola vez
+            df['sku_search'] = df['sku_search'].astype(str).str.strip().str.upper()
+            df['item'] = df['item'].astype(str).str.strip().str.upper()
+            
+            # 2. Usar float32 reduce el uso de RAM a la mitad en números
+            df['total_unitario'] = pd.to_numeric(df['total_unitario'], errors='coerce').fillna(0).astype('float32')
+            
+        return df
+    except Exception as e:
+        st.error(f"Error cargando catálogo: {e}")
+        return pd.DataFrame()
+
+# Cargamos el catálogo en caché (Solo ocurre 1 vez por hora o al reiniciar)
+df_catalogo = cargar_catalogo_completo()
+
+def buscar_producto_local(sku_busqueda):
+    """Búsqueda ultra-rápida en memoria RAM"""
+    if df_catalogo.empty: return None
+    
+    sku_limpio = sku_busqueda.strip().upper().replace('-', '').replace(' ', '')
+    
+    # Filtro Pandas (Instantáneo)
+    resultado = df_catalogo[df_catalogo['sku_search'] == sku_limpio]
+    
+    # Si falla, intento búsqueda laxa
+    if resultado.empty:
+        resultado = df_catalogo[df_catalogo['item'].str.contains(sku_limpio, na=False)]
+        
+    if not resultado.empty:
+        return resultado.iloc[0]
+    return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def obtener_imagen_y_traducir(sku, descripcion_original):
+    """
+    Combina lo pesado (Scraping + Traducción) en una función cacheada
+    y fuerza la limpieza de memoria al terminar.
+    """
+    url_final = None
+    desc_es = descripcion_original
+    
+    # A. IMAGEN (Solo si no viene en BD)
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        url = f"https://partsouq.com/en/search/all?q={sku}"
+        r = requests.get(url, headers=headers, timeout=3)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            imgs = soup.select('table.table img')
+            for i in imgs:
+                src = i.get('src', '')
+                if '/assets/' in src and 'no-image' not in src:
+                    url_final = "https://partsouq.com" + src if src.startswith("/") else src
+                    break
+            del soup # Borramos explícitamente el objeto pesado
+    except: pass
+    
+    # B. TRADUCCIÓN
+    try:
+        traductor = GoogleTranslator(source='auto', target='es')
+        desc_es = traductor.translate(descripcion_original)
+        del traductor # Adiós al objeto traductor
+    except: pass
+    
+    # Limpieza final de RAM
+    gc.collect()
+    
+    return url_final, desc_es
 
 # --- 6. INTERFAZ: HEADER ---
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -373,66 +409,65 @@ if submit_btn and busqueda_input:
     st.session_state.busqueda_activa = busqueda_input
     st.session_state.imagen_cache = None
 
-# --- 8. RESULTADOS ---
+# --- 8. RESULTADOS OPTIMIZADOS ---
 if st.session_state.busqueda_activa:
     busqueda = st.session_state.busqueda_activa
     
-    if not supabase:
-        st.error("❌ Sin conexión a base de datos.")
-    else:
-        with st.spinner("Consultando sistema..."):
-            producto = buscar_producto_smart(busqueda)
+    # 1. Búsqueda en RAM (No consume red ni crea conexiones nuevas)
+    producto_fila = buscar_producto_local(busqueda)
+    
+    if producto_fila is not None:
+        sku_val = producto_fila['item']
+        precio_base = float(producto_fila['total_unitario'])
+        desc_bd = producto_fila['descripcion']
+        url_bd = producto_fila['img_url']
+        
+        # 2. Solo ejecutamos lo pesado si es estrictamente necesario
+        if not url_bd:
+            url_extra, desc_traducida = obtener_imagen_y_traducir(sku_val, desc_bd)
+            url_final = url_extra
+            # Guardamos la imagen encontrada para la próxima (Optimización a futuro)
+            if url_extra: guardar_datos_enriquecidos(sku_val, url_extra)
+        else:
+            url_final = url_bd
+            # Traducción ligera si ya tenemos imagen
+            try: desc_traducida = GoogleTranslator(source='auto', target='es').translate(desc_bd)
+            except: desc_traducida = desc_bd
+
+        # Renderizado
+        if url_final:
+            st.image(url_final, caption="Referencia", use_container_width=True)
+        else:
+            st.info("📷 Sin imagen disponible")
+
+        st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_traducida}</div>", unsafe_allow_html=True)
+        
+        try: final_unitario = precio_base * 1.16
+        except: final_unitario = 0.0
+        
+        if final_unitario > 0:
+            st.markdown(f"<div class='big-price'>${final_unitario:,.2f}</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align: center; font-size: 14px; font-weight: bold;'>Precio Unitario (IVA Incluido)</div>", unsafe_allow_html=True)
             
-            if producto:
-                sku_val = producto.get('item', busqueda) 
-                desc_raw = producto.get('descripcion', 'Sin descripción')
-                precio_base = float(producto.get('total_unitario', 0))
-                
-                url_imagen = producto.get('img_url') 
-                if not url_imagen:
-                    if not st.session_state.imagen_cache:
-                        url_imagen = obtener_imagen_clasica(sku_val)
-                        st.session_state.imagen_cache = url_imagen
-                        guardar_datos_enriquecidos(sku_val, url_imagen)
-                    else:
-                        url_imagen = st.session_state.imagen_cache
-                
-                # Traducción forzosa
-                desc_es = traducir_texto(desc_raw)
-                
-                try: final_unitario = precio_base * 1.16
-                except: final_unitario = 0.0
-
-                if url_imagen:
-                    st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
-                else:
-                    st.info("📷 Imagen no disponible digitalmente.")
-
-                st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
-                
-                if final_unitario > 0:
-                    st.markdown(f"<div class='big-price'>${final_unitario:,.2f}</div>", unsafe_allow_html=True)
-                    st.markdown("<div style='text-align: center; font-size: 14px; font-weight: bold;'>Precio Unitario (IVA Incluido)</div>", unsafe_allow_html=True)
-                    
-                    st.markdown("---")
-                    
-                    c1, c2 = st.columns([1, 1])
-                    with c1:
-                        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-                        cantidad = st.number_input("Cantidad:", min_value=1, value=1, step=1)
-                    with c2:
-                        total_calculado = final_unitario * cantidad
-                        st.markdown(f"""
-                        <div class="total-card">
-                            <div class="total-label">Total Neto ({int(cantidad)} Pzas)</div>
-                            <div class="total-value">${total_calculado:,.2f}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.warning("Precio no disponible.")
-            else:
-                st.error("❌ CÓDIGO NO ENCONTRADO")
+            st.markdown("---")
+            
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+                cantidad = st.number_input("Cantidad:", min_value=1, value=1, step=1)
+            with c2:
+                total_calculado = final_unitario * cantidad
+                st.markdown(f"""
+                <div class="total-card">
+                    <div class="total-label">Total Neto ({int(cantidad)} Pzas)</div>
+                    <div class="total-value">${total_calculado:,.2f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning("Precio no disponible.")
+    else:
+        st.error("❌ CÓDIGO NO ENCONTRADO")
 
 # --- 9. FOOTER ---
 st.markdown("---")
