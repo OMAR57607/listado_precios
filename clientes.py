@@ -382,16 +382,34 @@ if st.session_state.sku_search:
             else:
                 st.error(f"❌ El código '{st.session_state.sku_search}' no se encuentra en el catálogo.")
 
-# --- 8. FOOTER LEGAL PROFECO ---
+# --- 8. FOOTER LEGAL (CUMPLIMIENTO PROFECO / LFPC) ---
+st.markdown("---")
 st.markdown(f"""
+    <style>
+        .legal-footer {{
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 11px;
+            color: var(--text-color); /* Se adapta al tema dinámico */
+            opacity: 0.8;
+            text-align: justify;
+            line-height: 1.5;
+            padding-top: 20px;
+            margin-top: 10px;
+        }}
+        .legal-footer strong {{
+            font-weight: 700;
+            text-transform: uppercase;
+        }}
+    </style>
+
     <div class="legal-footer">
         <strong>MARCO LEGAL Y PROTECCIÓN AL CONSUMIDOR</strong><br>
         La información presentada en este cotizador digital cumple con las disposiciones de la <strong>Ley Federal de Protección al Consumidor (LFPC)</strong> y las Normas Oficiales Mexicanas vigentes:
         <br><br>
-        <strong>1. EXHIBICIÓN DE PRECIOS (Art. 7 Bis LFPC):</strong> El monto exhibido representa el <strong>PRECIO TOTAL A PAGAR</strong>. Incluye costo del producto, Impuesto al Valor Agregado (IVA del 16%) y gastos administrativos. No existen costos ocultos.
+        <strong>1. EXHIBICIÓN DE PRECIOS (Art. 7 Bis LFPC):</strong> El monto exhibido representa el <strong>PRECIO TOTAL A PAGAR</strong>. Incluye costo del producto, Impuesto al Valor Agregado (IVA del 16%) y gastos administrativos. No existen costos ocultos ni cargos adicionales no desglosados al momento de la consulta.
         <br><br>
-        <strong>2. VIGENCIA Y EXACTITUD (NOM-174-SCFI-2007):</strong> El precio es válido exclusivamente al momento de la consulta (<strong>{fecha_actual.strftime("%d/%m/%Y a las %H:%M horas")}</strong>). Toyota Los Fuertes garantiza el respeto al precio mostrado durante la transacción inmediata.
+        <strong>2. VIGENCIA Y EXACTITUD (NOM-174-SCFI-2007):</strong> Debido a la naturaleza dinámica del mercado automotriz, el precio es válido exclusivamente al momento de la emisión de este reporte (<strong>{fecha_actual.strftime("%d/%m/%Y a las %H:%M horas")}</strong>). Toyota Los Fuertes garantiza el respeto al precio mostrado durante la transacción inmediata, salvo error evidente de sistema o agiotaje.
         <br><br>
-        <strong>3. INFORMACIÓN COMERCIAL (Art. 32 LFPC):</strong> Las imágenes mostradas tienen fines ilustrativos y de referencia técnica visual; provienen de catálogos globales y pueden diferir de la presentación física del producto.
+        <strong>3. INFORMACIÓN COMERCIAL (Art. 32 LFPC):</strong> Las imágenes mostradas tienen fines ilustrativos y de referencia técnica visual; provienen de catálogos globales y pueden diferir ligeramente de la presentación física del producto en inventario. La compatibilidad debe verificarse mediante número de serie (VIN).
     </div>
 """, unsafe_allow_html=True)
