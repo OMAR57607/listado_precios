@@ -252,7 +252,7 @@ with col_in:
 with col_btn:
     st.button("BUSCAR", type="primary", use_container_width=True, on_click=ejecutar_busqueda)
 with col_cls:
-    st.button("✖", type="secondary", use_container_width=True, on_click=limpiar)
+    st.button("🗑️", type="secondary", use_container_width=True, on_click=limpiar)
 
 # --- 7. RESULTADOS Y LÓGICA INTELIGENTE ---
 if st.session_state.sku_search:
