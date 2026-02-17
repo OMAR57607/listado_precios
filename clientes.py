@@ -239,20 +239,35 @@ def traducir(texto):
 
 # --- 6. INTERFAZ GRÁFICA ---
 
-# Header con Logo Local
-# CAMBIO 1: Ajustamos la proporción [1.5, 3] para que la columna del logo sea más ancha
-c1, c2 = st.columns([1.5, 3]) 
+# Header con Logo Local y Texto Adaptativo
+c1, c2 = st.columns([1.5, 3]) # Mantenemos la proporción amplia para el logo
 
 with c1:
     if os.path.exists("logo.png"):
-        # Al ser la columna más ancha, la imagen crecerá automáticamente
         st.image("logo.png", use_container_width=True)
     else:
-        st.markdown(f"<div style='font-size:80px; text-align:center;'>🔴</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:60px; text-align:center;'>🔴</div>", unsafe_allow_html=True)
 
 with c2:
     st.markdown(f"""
-        <div style="text-align: right; padding-top: 15px;">
+        <style>
+        /* Estilo por defecto (Escritorio): Alineado a la derecha */
+        .header-title {{
+            text-align: right;
+            padding-top: 15px;
+        }}
+        
+        /* Estilo para Celulares (Pantallas menores a 768px) */
+        @media (max-width: 768px) {{
+            .header-title {{
+                text-align: center !important; /* Forzar centrado */
+                margin-top: -10px;         /* Subirlo un poco para pegarlo al logo */
+                padding-bottom: 10px;
+            }}
+        }}
+        </style>
+
+        <div class="header-title">
             <strong style="font-size: 2.5rem; text-transform:uppercase; line-height: 1;">TOYOTA LOS FUERTES</strong><br>
             <span style="font-size: 1.1rem; opacity: 0.8;">{fecha_actual.strftime("%d/%m/%Y - %H:%M")}</span>
         </div>
