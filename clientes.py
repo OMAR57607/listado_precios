@@ -152,7 +152,7 @@ def apply_dynamic_styles():
             height: 55px !important; /* Misma altura que el botón rojo */
             padding-bottom: 5px !important; /* Ajuste para centrar el emoji verticalmente */
             line-height: 1 !important;
-        }
+        }}
         button[kind="secondary"]:hover {{
             border-color: var(--accent) !important;
             transform: scale(1.05); /* Efecto pop al pasar el mouse */
