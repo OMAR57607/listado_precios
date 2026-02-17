@@ -143,7 +143,7 @@ def apply_dynamic_styles():
         button[kind="primary"]:hover {{ opacity: 0.9; }}
 
         /* --- BOTÓN BASURA (LIMPIAR) --- */
-        button[kind="secondary"] {
+        button[kind="secondary"] {{
             background-color: var(--btn-sec-bg) !important;
             color: var(--btn-sec-text) !important;
             border: 2px solid var(--btn-border) !important; /* Borde un poco más grueso */
@@ -153,10 +153,10 @@ def apply_dynamic_styles():
             padding-bottom: 5px !important; /* Ajuste para centrar el emoji verticalmente */
             line-height: 1 !important;
         }
-        button[kind="secondary"]:hover {
+        button[kind="secondary"]:hover {{
             border-color: var(--accent) !important;
             transform: scale(1.05); /* Efecto pop al pasar el mouse */
-        }
+        }}
         
         /* IMAGEN (Siempre fondo blanco suave para que se vea bien) */
         div[data-testid="stImage"] {{
