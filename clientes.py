@@ -240,17 +240,21 @@ def traducir(texto):
 # --- 6. INTERFAZ GRÁFICA ---
 
 # Header con Logo Local
-c1, c2 = st.columns([1, 3])
+# CAMBIO 1: Ajustamos la proporción [1.5, 3] para que la columna del logo sea más ancha
+c1, c2 = st.columns([1.5, 3]) 
+
 with c1:
     if os.path.exists("logo.png"):
+        # Al ser la columna más ancha, la imagen crecerá automáticamente
         st.image("logo.png", use_container_width=True)
     else:
-        st.markdown(f"<div style='font-size:50px; text-align:center;'>🔴</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:80px; text-align:center;'>🔴</div>", unsafe_allow_html=True)
+
 with c2:
     st.markdown(f"""
-        <div style="text-align: right; padding-top:10px;">
-            <strong style="font-size: 1.2rem; text-transform:uppercase;">TOYOTA LOS FUERTES</strong><br>
-            <span style="font-size: 0.9rem; opacity: 0.8;">{fecha_actual.strftime("%d/%m/%Y - %H:%M")}</span>
+        <div style="text-align: right; padding-top: 15px;">
+            <strong style="font-size: 2.5rem; text-transform:uppercase; line-height: 1;">TOYOTA LOS FUERTES</strong><br>
+            <span style="font-size: 1.1rem; opacity: 0.8;">{fecha_actual.strftime("%d/%m/%Y - %H:%M")}</span>
         </div>
     """, unsafe_allow_html=True)
 
