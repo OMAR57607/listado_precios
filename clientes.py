@@ -142,20 +142,22 @@ def apply_dynamic_styles():
         }}
         button[kind="primary"]:hover {{ opacity: 0.9; }}
 
-        /* --- BOTÓN GRIS/OSCURO (LIMPIAR/CERRAR) --- */
-        button[kind="secondary"] {{
+        /* --- BOTÓN BASURA (LIMPIAR) --- */
+        button[kind="secondary"] {
             background-color: var(--btn-sec-bg) !important;
             color: var(--btn-sec-text) !important;
-            border: 1px solid var(--btn-border) !important;
-            font-size: 20px !important;
-            border-radius: 8px !important;
-            height: 50px !important;
-        }}
-        button[kind="secondary"]:hover {{
+            border: 2px solid var(--btn-border) !important; /* Borde un poco más grueso */
+            font-size: 26px !important; /* <--- AUMENTAR TAMAÑO PARA EL ÍCONO */
+            border-radius: 10px !important;
+            height: 55px !important; /* Misma altura que el botón rojo */
+            padding-bottom: 5px !important; /* Ajuste para centrar el emoji verticalmente */
+            line-height: 1 !important;
+        }
+        button[kind="secondary"]:hover {
             border-color: var(--accent) !important;
-            color: var(--accent) !important;
-        }}
-
+            transform: scale(1.05); /* Efecto pop al pasar el mouse */
+        }
+        
         /* IMAGEN (Siempre fondo blanco suave para que se vea bien) */
         div[data-testid="stImage"] {{
             background-color: rgba(255,255,255, 0.95);
