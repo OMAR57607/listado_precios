@@ -9,64 +9,156 @@ import pytz
 import sentry_sdk
 from supabase import create_client, Client
 
-# --- 1. CONFIGURACIÓN Y SECRETOS ---
+# --- 1. CONFIGURACIÓN INICIAL ---
 st.set_page_config(
     page_title="Toyota Los Fuertes",
     page_icon="🔴",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    layout="centered"
 )
 
-def get_config(key):
-    """Obtiene configuración de entorno o st.secrets de forma segura"""
-    return os.environ.get(key) or st.secrets.get(key)
+def get_secret(key):
+    val = os.environ.get(key)
+    if val: return val
+    try:
+        if key in st.secrets: return st.secrets[key]
+    except: pass
+    return None
 
-# Inicializar Sentry (Manejo de errores silencioso)
-sentry_dsn = get_config("SENTRY_DSN")
+# Inicializar Sentry
+sentry_dsn = get_secret("SENTRY_DSN")
 if sentry_dsn:
     try:
-        sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=0.5, profiles_sample_rate=0.5)
-    except Exception:
-        pass
+        sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=1.0, profiles_sample_rate=1.0)
+    except: pass
 
-# --- 2. GESTIÓN DE ESTADO (SESSION STATE) ---
+# --- 2. CONEXIÓN A SUPABASE ---
+@st.cache_resource
+def init_supabase():
+    url = get_secret("SUPABASE_URL")
+    key = get_secret("SUPABASE_KEY")
+    if not url or not key: return None
+    return create_client(url, key)
+
+try:
+    supabase = init_supabase()
+except:
+    supabase = None
+
+# --- 3. FUNCIONES DE TIEMPO Y ESTADO ---
 if 'producto_actual' not in st.session_state:
     st.session_state.producto_actual = None
 if 'busqueda_activa' not in st.session_state:
     st.session_state.busqueda_activa = ""
-
-# --- 3. CONEXIÓN A SUPABASE ---
-@st.cache_resource
-def init_supabase():
-    try:
-        url = get_config("SUPABASE_URL")
-        key = get_config("SUPABASE_KEY")
-        if not url or not key:
-            return None
-        return create_client(url, key)
-    except Exception as e:
-        print(f"Error Supabase: {e}")
-        return None
-
-supabase = init_supabase()
-
-# --- 4. LÓGICA DE NEGOCIO Y SCRAPING ---
+if 'sku_input' not in st.session_state:
+    st.session_state.sku_input = ""
 
 def obtener_hora_mx():
     try:
-        return datetime.now(pytz.timezone('America/Mexico_City'))
+        tz = pytz.timezone('America/Mexico_City')
+        return datetime.now(tz)
     except:
         return datetime.now()
 
+fecha_actual = obtener_hora_mx()
+
+# --- 4. ESTILOS CSS ---
+def inject_css():
+    st.markdown("""
+        <style>
+            /* Reset básico */
+            .stApp {
+                background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                background-attachment: fixed;
+            }
+            
+            /* Contenedor Principal estilo Tarjeta */
+            div[data-testid="stBlockContainer"] {
+                background-color: rgba(255, 255, 255, 0.95);
+                border-radius: 15px;
+                padding: 2rem;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+                max-width: 700px;
+                margin-top: 10px;
+            }
+
+            /* Inputs Grandes y Claros */
+            .stTextInput input {
+                font-size: 22px !important;
+                font-weight: 800 !important;
+                text-align: center !important;
+                color: #000000 !important; /* Texto negro forzoso */
+                background-color: #ffffff !important;
+                border: 2px solid #eb0a1e !important; /* Borde Rojo Toyota */
+                border-radius: 10px;
+                padding: 10px !important;
+            }
+
+            /* Botones */
+            button[kind="primary"] {
+                background-color: #eb0a1e !important;
+                color: white !important;
+                font-weight: bold !important;
+                font-size: 18px !important;
+                border: none !important;
+                border-radius: 8px !important;
+                text-transform: uppercase;
+                height: 50px;
+            }
+            button[kind="secondary"] {
+                background-color: #f0f0f0 !important;
+                color: #333 !important;
+                border: 1px solid #ccc !important;
+                font-size: 20px !important;
+                height: 50px;
+            }
+
+            /* Imágenes */
+            div[data-testid="stImage"] {
+                background-color: white;
+                border-radius: 10px;
+                padding: 10px;
+                display: flex;
+                justify-content: center;
+                border: 1px solid #eee;
+            }
+            div[data-testid="stImage"] img {
+                max-height: 250px;
+                object-fit: contain;
+            }
+
+            /* Precios */
+            .precio-grande {
+                color: #eb0a1e;
+                font-size: 50px;
+                font-weight: 900;
+                text-align: center;
+                line-height: 1;
+                margin: 10px 0;
+            }
+            
+            /* Footer */
+            footer {visibility: hidden;}
+            .legal-text {
+                font-size: 10px;
+                color: #666;
+                text-align: justify;
+                margin-top: 20px;
+                border-top: 1px solid #ddd;
+                padding-top: 10px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+inject_css()
+
+# --- 5. LÓGICA DE NEGOCIO (IMAGEN Y TRADUCCIÓN) ---
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def obtener_imagen_externa(sku):
-    """Scraping optimizado con Timeouts para no congelar la app"""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    
-    # Intento 1: Partsouq
+def buscar_imagen_web(sku):
+    """Busca imagen en web solo si no existe en BD"""
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
+        # Intento 1: Partsouq
         url = f"https://partsouq.com/en/search/all?q={sku}"
         r = requests.get(url, headers=headers, timeout=3)
         if r.status_code == 200:
@@ -75,12 +167,9 @@ def obtener_imagen_externa(sku):
             for i in imgs:
                 src = i.get('src', '')
                 if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
-                    return "https:" + src if src.startswith("//") else ("https://partsouq.com" + src if src.startswith("/") else src)
-    except Exception:
-        pass
-
-    # Intento 2: Google Images (Fallback)
-    try:
+                    return "https:" + src if src.startswith("//") else "https://partsouq.com" + src
+        
+        # Intento 2: Google (Fallback)
         url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
         r = requests.get(url_g, headers=headers, timeout=3)
         if r.status_code == 200:
@@ -90,314 +179,143 @@ def obtener_imagen_externa(sku):
                 src = img.get('src')
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
                     return src
-    except Exception:
+    except:
         pass
-        
     return None
 
 def traducir_texto(texto):
-    """Traduce y maneja errores de red"""
-    if not texto or texto == "Sin descripción": return texto
-    try:
-        return GoogleTranslator(source='auto', target='es').translate(texto)
-    except:
-        return texto
+    try: return GoogleTranslator(source='auto', target='es').translate(texto)
+    except: return texto
 
-def actualizar_base_datos(sku_real, data_update):
-    """Guarda imagen y traducción en BD para futuros usuarios (mejora rendimiento)"""
-    if supabase and data_update:
-        try:
-            supabase.table('catalogo_toyota').update(data_update).eq('item', sku_real).execute()
-        except Exception:
-            pass
+# --- 6. HEADER CON LOGO (CORREGIDO) ---
+col_logo, col_titulo = st.columns([1, 3])
 
-def buscar_producto(sku_usuario):
-    if not supabase: return None
-    
-    sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
-    
-    try:
-        # Búsqueda exacta por columna de búsqueda optimizada
-        response = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_limpio).execute()
-        
-        # Fallback: búsqueda flexible
-        if not response.data:
-            response = supabase.table('catalogo_toyota').select("*").ilike('item', f"%{sku_limpio}%").limit(1).execute()
-            
-        if response.data:
-            prod = response.data[0]
-            
-            # --- LÓGICA DE ENRIQUECIMIENTO DE DATOS ---
-            # Si faltan datos (imagen o traducción), los buscamos y guardamos
-            updates = {}
-            sku_real = prod.get('item')
-            
-            # 1. Imagen
-            if not prod.get('img_url'):
-                img = obtener_imagen_externa(sku_real)
-                if img:
-                    prod['img_url'] = img
-                    updates['img_url'] = img
-            
-            # 2. Traducción (Asumimos que hay un campo 'descripcion_es' en la BD, si no, usa 'descripcion')
-            desc_en = prod.get('descripcion', '')
-            desc_es = prod.get('descripcion_es') # Campo hipotético nuevo
-            
-            if not desc_es and desc_en:
-                traduccion = traducir_texto(desc_en)
-                prod['descripcion_es'] = traduccion # Usamos este para mostrar
-                updates['descripcion_es'] = traduccion # Guardaríamos si existiera la columna
-            elif not desc_es:
-                prod['descripcion_es'] = desc_en # Fallback
-
-            # Guardar cambios en segundo plano si hubo actualizaciones
-            if updates:
-                actualizar_base_datos(sku_real, updates)
-                
-            return prod
-            
-    except Exception as e:
-        st.error(f"Error de conexión: {e}")
-    
-    return None
-
-# --- 5. ESTILOS Y TEMA ---
-def inject_css(hora_actual):
-    """Inyecta todo el CSS basado en la hora"""
-    h = hora_actual.hour
-    
-    # Definición de temas
-    if 6 <= h < 18:
-        theme = {
-            "bg": "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)", # Gris azulado claro profesional
-            "card": "rgba(255, 255, 255, 0.95)",
-            "text": "#1a1a1a",
-            "accent": "#eb0a1e", # Toyota Red
-            "shadow": "0 8px 32px 0 rgba(31, 38, 135, 0.15)"
-        }
+with col_logo:
+    # LÓGICA DEL LOGO: Busca el archivo local
+    if os.path.exists("logo.png"):
+        st.image("logo.png", use_container_width=True)
     else:
-        theme = {
-            "bg": "linear-gradient(to bottom, #0f2027, #203a43, #2c5364)", # Dark professional
-            "card": "rgba(20, 20, 20, 0.9)",
-            "text": "#ffffff",
-            "accent": "#ff4d4d",
-            "shadow": "0 8px 32px 0 rgba(0, 0, 0, 0.5)"
-        }
+        # Fallback si no hay logo
+        st.markdown("<h1 style='text-align: center;'>🔴</h1>", unsafe_allow_html=True)
 
+with col_titulo:
     st.markdown(f"""
-        <style>
-            /* Reset y Base */
-            .stApp {{
-                background-image: {theme['bg']};
-                background-attachment: fixed;
-                background-size: cover;
-            }}
-            
-            /* Contenedor Principal */
-            [data-testid="stBlockContainer"] {{
-                background-color: {theme['card']};
-                border-radius: 20px;
-                padding: 2rem;
-                box-shadow: {theme['shadow']};
-                border: 1px solid rgba(255,255,255,0.1);
-            }}
-            
-            /* Tipografía */
-            h1, h2, h3, p, div, label, span {{
-                color: {theme['text']} !important;
-                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            }}
-
-            /* Inputs */
-            .stTextInput input {{
-                font-size: 20px !important;
-                font-weight: bold;
-                text-align: center;
-                color: #000 !important;
-                border: 2px solid #ddd;
-                border-radius: 10px;
-            }}
-            .stTextInput input:focus {{
-                border-color: {theme['accent']} !important;
-                box-shadow: 0 0 0 2px rgba(235, 10, 30, 0.2);
-            }}
-
-            /* Botones */
-            button[kind="primary"] {{
-                background-color: {theme['accent']} !important;
-                border: none !important;
-                transition: all 0.3s ease;
-                font-weight: 800 !important;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }}
-            button[kind="primary"]:hover {{
-                opacity: 0.9;
-                transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(235, 10, 30, 0.4);
-            }}
-            
-            button[kind="secondary"] {{
-                border: 2px solid #999 !important;
-                color: #555 !important;
-            }}
-
-            /* Imagen */
-            div[data-testid="stImage"] {{
-                background: white;
-                border-radius: 15px;
-                padding: 10px;
-                display: flex;
-                justify_content: center;
-            }}
-            div[data-testid="stImage"] img {{
-                max-height: 250px;
-                object-fit: contain;
-            }}
-
-            /* Precio */
-            .price-tag {{
-                font-size: clamp(3rem, 5vw, 4rem);
-                font-weight: 900;
-                color: {theme['accent']};
-                text-align: center;
-                margin: 10px 0;
-                line-height: 1;
-            }}
-
-            /* Tarjeta Total */
-            .total-card {{
-                background: rgba(128,128,128,0.1);
-                border-left: 5px solid {theme['accent']};
-                padding: 15px;
-                border-radius: 8px;
-                text-align: center;
-            }}
-            
-            /* Ocultar elementos de Streamlit */
-            #MainMenu, footer, header {{visibility: hidden;}}
-        </style>
-    """, unsafe_allow_html=True)
-
-# --- 6. INTERFAZ GRÁFICA ---
-
-fecha_actual = obtener_hora_mx()
-inject_css(fecha_actual)
-
-# Header
-c_logo, c_info = st.columns([1, 3])
-with c_info:
-    st.markdown(f"""
-        <div style="text-align: right; font-size: 0.8rem; opacity: 0.8;">
-            <b>TOYOTA LOS FUERTES</b><br>
-            {fecha_actual.strftime("%d/%m/%Y %H:%M")}
+        <div style="text-align: right; padding-top: 10px;">
+            <h3 style="margin:0; color:black;">TOYOTA LOS FUERTES</h3>
+            <span style="font-size: 14px; color: #555;">
+                {fecha_actual.strftime("%d/%m/%Y")} - {fecha_actual.strftime("%H:%M")}
+            </span>
         </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<h2 style='text-align: center; font-weight: 800; margin-bottom: 30px;'>COTIZADOR DE PARTES</h2>", unsafe_allow_html=True)
+st.markdown("---")
+st.markdown("<h3 style='text-align: center; font-weight: 800; color: #333;'>COTIZADOR DIGITAL</h3>", unsafe_allow_html=True)
 
-# Funciones de Callback para el Formulario
-def ejecutar_busqueda():
-    st.session_state.busqueda_activa = st.session_state.sku_input
-
-def limpiar_todo():
+# --- 7. FORMULARIO DE BÚSQUEDA ---
+def limpiar_busqueda():
     st.session_state.sku_input = ""
     st.session_state.busqueda_activa = ""
-    st.session_state.producto_actual = None
 
-# Área de Búsqueda
-with st.container():
-    col_in, col_btn, col_clr = st.columns([3, 1.3, 0.7], gap="small")
-    
-    with col_in:
-        # Vinculamos el input al session_state
-        st.text_input("SKU", 
-                      placeholder="Ej. 90915-YZZD1", 
-                      label_visibility="collapsed", 
-                      key="sku_input",
-                      on_change=ejecutar_busqueda) # Enter activa la búsqueda
-    
-    with col_btn:
-        st.button("BUSCAR 🔍", 
-                  type="primary", 
-                  use_container_width=True, 
-                  on_click=ejecutar_busqueda)
-        
-    with col_clr:
-        st.button("🗑️", 
-                  type="secondary", 
-                  use_container_width=True, 
-                  on_click=limpiar_todo)
+# Contenedor para inputs
+c_in, c_go, c_del = st.columns([3, 1.2, 0.6], gap="small")
 
-# Área de Resultados
-if st.session_state.busqueda_activa:
-    with st.spinner("Buscando en catálogo global..."):
-        producto = buscar_producto(st.session_state.busqueda_activa)
-        
-    if producto:
-        st.markdown("---")
-        
-        # Datos del producto
-        sku_val = producto.get('item')
-        # Preferimos la descripción en español si la generamos, sino la original
-        desc = producto.get('descripcion_es', producto.get('descripcion', 'Sin descripción'))
-        precio_base = float(producto.get('total_unitario', 0))
-        img_url = producto.get('img_url')
-        
-        # Cálculo IVA
+with c_in:
+    sku_val = st.text_input("SKU", key="sku_input", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed")
+
+with c_go:
+    if st.button("BUSCAR 🔍", type="primary", use_container_width=True):
+        st.session_state.busqueda_activa = sku_val
+
+with c_del:
+    st.button("🗑️", type="secondary", use_container_width=True, on_click=limpiar_busqueda)
+
+
+# --- 8. RESULTADOS ---
+if st.session_state.busqueda_activa and supabase:
+    sku_search = st.session_state.busqueda_activa.strip().upper()
+    sku_clean = sku_search.replace('-', '').replace(' ', '')
+    
+    with st.spinner("Consultando catálogo..."):
+        # 1. Buscar producto
         try:
-            precio_final = precio_base * 1.16
-        except:
-            precio_final = 0.0
+            # Primero busca exacto en sku_search
+            resp = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_clean).execute()
+            if not resp.data:
+                # Intenta like
+                resp = supabase.table('catalogo_toyota').select("*").ilike('item', f"%{sku_clean}%").limit(1).execute()
+            
+            datos = resp.data[0] if resp.data else None
+        except Exception as e:
+            datos = None
+            st.error(f"Error de conexión: {e}")
 
-        # Layout de Ficha Técnica
-        col_img, col_det = st.columns([1, 1.5])
+    if datos:
+        # Extraer datos básicos
+        sku_real = datos.get('item', sku_search)
+        desc_raw = datos.get('descripcion', 'Sin descripción')
+        precio_base = float(datos.get('total_unitario', 0))
         
-        with col_img:
-            if img_url:
-                st.image(img_url, use_container_width=True)
+        # --- LÓGICA DE IMAGEN (CORREGIDA) ---
+        # 1. Intentar obtener img_url directo de Supabase
+        url_imagen = datos.get('img_url')
+
+        # 2. Si NO hay imagen en base de datos, buscar en web
+        if not url_imagen:
+            url_imagen = buscar_imagen_web(sku_real)
+            # 3. Si encontramos imagen nueva, guardarla en Supabase para el futuro
+            if url_imagen:
+                try:
+                    supabase.table('catalogo_toyota').update({'img_url': url_imagen}).eq('item', sku_real).execute()
+                except: pass
+        
+        # Traducción
+        desc_es = traducir_texto(desc_raw)
+        
+        # Mostrar Ficha
+        c_img, c_data = st.columns([1, 1.5])
+        
+        with c_img:
+            if url_imagen:
+                st.image(url_imagen, use_container_width=True)
             else:
-                st.markdown("""
-                    <div style="background:#eee; height:200px; border-radius:15px; display:flex; align-items:center; justify-content:center; color:#888;">
-                        📸 Sin Imagen
-                    </div>
-                """, unsafe_allow_html=True)
-                
-        with col_det:
-            st.markdown(f"<div style='font-size: 1.2rem; font-weight: bold; color: #eb0a1e;'>{sku_val}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size: 1.1rem; margin-bottom: 10px;'>{desc}</div>", unsafe_allow_html=True)
+                st.info("📷 Sin imagen disponible")
+
+        with c_data:
+            st.markdown(f"**SKU:** {sku_real}")
+            st.markdown(f"<div style='font-size: 18px; font-weight: bold; margin-bottom: 10px;'>{desc_es}</div>", unsafe_allow_html=True)
+            
+            try: precio_final = precio_base * 1.16
+            except: precio_final = 0.0
             
             if precio_final > 0:
-                st.markdown(f"<div class='price-tag'>${precio_final:,.2f}</div>", unsafe_allow_html=True)
-                st.caption("Precio Unitario (IVA Incluido)")
+                st.markdown(f"<div class='precio-grande'>${precio_final:,.2f}</div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align: center; font-size: 12px; font-weight: bold;'>Precio Unitario (IVA Incluido)</div>", unsafe_allow_html=True)
             else:
-                st.warning("Precio no disponible en catálogo")
+                st.warning("Precio no disponible")
 
-        # Calculadora de Cantidad
+        # Calculadora rápida
         if precio_final > 0:
             st.markdown("---")
-            c_cant, c_total = st.columns([1, 2])
-            with c_cant:
-                cantidad = st.number_input("Cantidad", min_value=1, value=1, step=1)
-            
-            with c_total:
-                total = precio_final * cantidad
+            col_qty, col_tot = st.columns([1, 2])
+            with col_qty:
+                qty = st.number_input("Cantidad", min_value=1, value=1)
+            with col_tot:
+                total = precio_final * qty
                 st.markdown(f"""
-                <div class="total-card">
-                    <span style="font-size:0.9rem; text-transform:uppercase;">Total Neto ({cantidad} pzas)</span><br>
-                    <span style="font-size:1.8rem; font-weight:900;">${total:,.2f}</span>
-                </div>
+                    <div style="background-color: #f8f9fa; border-left: 5px solid #eb0a1e; padding: 10px; border-radius: 5px; text-align: center;">
+                        <span style="font-weight: bold;">TOTAL NETO ({qty} Pzas)</span><br>
+                        <span style="font-size: 24px; font-weight: 900;">${total:,.2f}</span>
+                    </div>
                 """, unsafe_allow_html=True)
-                
-    else:
-        st.error(f"❌ El código '{st.session_state.busqueda_activa}' no se encontró en la base de datos.")
 
-# Footer Legal
-st.markdown("---")
+    else:
+        st.error(f"❌ El código {sku_search} no fue encontrado.")
+
+# --- 9. FOOTER ---
 st.markdown(f"""
-    <div style="font-size: 10px; text-align: justify; opacity: 0.6; line-height: 1.4;">
-        <strong>TÉRMINOS Y CONDICIONES:</strong> Precios en MXN incluyen IVA (16%). 
-        Válido al {fecha_actual.strftime("%d/%m/%Y %H:%M")}. Las imágenes son ilustrativas (Fuente: Catálogos externos).
-        Toyota Los Fuertes no se hace responsable por errores tipográficos.
+    <div class="legal-text">
+        <strong>INFORMACIÓN LEGAL:</strong> Precios válidos al {fecha_actual.strftime("%d/%m/%Y %H:%M")}. 
+        Incluye IVA (16%). Las imágenes son referenciales obtenidas de catálogos internacionales.
+        Verificar compatibilidad física antes de la compra.
     </div>
 """, unsafe_allow_html=True)
