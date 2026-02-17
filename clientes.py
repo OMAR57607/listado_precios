@@ -10,11 +10,6 @@ import sentry_sdk
 from supabase import create_client, Client
 
 # --- 1. CONFIGURACIÓN INICIAL ---
-st.set_page_config(
-    page_title="Toyota Los Fuertes",
-    page_icon="🔴",
-    layout="centered"
-)
 
 def get_secret(key):
     val = os.environ.get(key)
@@ -24,14 +19,67 @@ def get_secret(key):
     except: pass
     return None
 
-# Inicializar Sentry
 sentry_dsn = get_secret("SENTRY_DSN")
 if sentry_dsn:
     try:
         sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=1.0, profiles_sample_rate=1.0)
     except: pass
 
-# --- 2. CONEXIÓN A SUPABASE ---
+st.set_page_config(
+    page_title="Toyota Los Fuertes",
+    page_icon="🔴",
+    layout="centered"
+)
+
+# Inicializar estado
+if 'producto_actual' not in st.session_state:
+    st.session_state.producto_actual = None
+if 'busqueda_activa' not in st.session_state:
+    st.session_state.busqueda_activa = ""
+if 'imagen_cache' not in st.session_state:
+    st.session_state.imagen_cache = None
+if 'sku_input' not in st.session_state:
+    st.session_state.sku_input = ""
+
+try: 
+    tz_cdmx = pytz.timezone('America/Mexico_City')
+except: 
+    tz_cdmx = None
+
+def obtener_hora_mx():
+    return datetime.now(tz_cdmx) if tz_cdmx else datetime.now()
+
+fecha_actual = obtener_hora_mx()
+
+# --- 2. ESTILOS UNIVERSALES (FUNCIONAN EN CUALQUIER DISPOSITIVO) ---
+st.markdown("""
+    <script>
+        document.documentElement.lang = 'es';
+        document.documentElement.setAttribute('translate', 'no');
+        document.body.classList.add('notranslate');
+    </script>
+    <style>
+        .goog-te-banner-frame { display: none !important; }
+        .notranslate { transform: translateZ(0); }
+        
+        /* FIX DE IMAGEN: Fondo blanco para que no se vea parche en modo oscuro */
+        div[data-testid="stImage"] {
+            background-color: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        div[data-testid="stImage"] img { 
+            max-height: 300px; 
+            object-fit: contain; 
+            margin: auto;
+            display: block;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 3. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
     url = get_secret("SUPABASE_URL")
@@ -44,134 +92,216 @@ try:
 except:
     supabase = None
 
-# --- 3. FUNCIONES DE TIEMPO Y ESTADO ---
-if 'producto_actual' not in st.session_state:
-    st.session_state.producto_actual = None
-if 'busqueda_activa' not in st.session_state:
-    st.session_state.busqueda_activa = ""
-if 'sku_input' not in st.session_state:
-    st.session_state.sku_input = ""
+# --- 4. TEMAS VISUALES ---
+def get_theme_by_time(date):
+    h = date.hour
+    if 6 <= h < 12:
+        return {
+            "css_bg": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
+            "card_bg": "rgba(255, 255, 255, 0.95)",
+            "text_color": "#000000",
+            "text_shadow": "none",
+            "accent_color": "#eb0a1e",
+            "footer_border": "#000000",
+            "total_card_bg": "rgba(240, 242, 246, 0.9)" 
+        }
+    elif 12 <= h < 19:
+        return {
+            "css_bg": "linear-gradient(135deg, #87CEEB 0%, #B0E0E6 100%)",
+            "card_bg": "rgba(255, 255, 255, 1)",
+            "text_color": "#000000",
+            "text_shadow": "none",
+            "accent_color": "#eb0a1e",
+            "footer_border": "#000000",
+            "total_card_bg": "rgba(240, 242, 246, 0.9)"
+        }
+    else:
+        return {
+            "css_bg": """
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 3px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 4px),
+                linear-gradient(to bottom, #000000 0%, #0c0c0c 100%)
+            """,
+            "bg_size": "550px 550px, 350px 350px, 250px 250px, 100% 100%",
+            "bg_pos": "0 0, 40px 60px, 130px 270px, 0 0",
+            "card_bg": "rgba(0, 0, 0, 0.9)",
+            "text_color": "#FFFFFF",
+            "text_shadow": "0px 2px 4px #000000",
+            "accent_color": "#ff4d4d",
+            "footer_border": "#FFFFFF",
+            "total_card_bg": "rgba(255, 255, 255, 0.1)"
+        }
 
-def obtener_hora_mx():
-    try:
-        tz = pytz.timezone('America/Mexico_City')
-        return datetime.now(tz)
-    except:
-        return datetime.now()
-
-fecha_actual = obtener_hora_mx()
-
-# --- 4. ESTILOS CSS ---
-def inject_css():
-    st.markdown("""
+def apply_dynamic_styles():
+    theme = get_theme_by_time(fecha_actual)
+    bg_extra_css = ""
+    if "bg_size" in theme:
+        bg_extra_css = f"background-size: {theme['bg_size']}; background-position: {theme['bg_pos']};"
+    
+    st.markdown(f"""
         <style>
-            /* Reset básico */
-            .stApp {
-                background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-                background-attachment: fixed;
-            }
-            
-            /* Contenedor Principal estilo Tarjeta */
-            div[data-testid="stBlockContainer"] {
-                background-color: rgba(255, 255, 255, 0.95);
-                border-radius: 15px;
-                padding: 2rem;
-                box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-                max-width: 700px;
-                margin-top: 10px;
-            }
+        :root {{
+            --text-color: {theme['text_color']};
+            --card-bg: {theme['card_bg']};
+            --accent: {theme['accent_color']};
+            --total-bg: {theme['total_card_bg']};
+            color-scheme: light; /* OBLIGATORIO: Fuerza colores claros en controles */
+        }}
+        
+        .stApp {{
+            background-image: {theme['css_bg']} !important;
+            {bg_extra_css}
+            background-attachment: fixed;
+        }}
+        
+        [data-testid="stBlockContainer"] {{
+            background-color: var(--card-bg) !important;
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            max-width: 700px;
+            margin-top: 20px;
+            border: 1px solid rgba(128,128,128, 0.3);
+        }}
+        
+        h1, h2, h3, h4, h5, h6, p, div, span, label, li {{
+            color: var(--text-color) !important;
+            text-shadow: {theme['text_shadow']} !important;
+            font-family: sans-serif;
+        }}
+        
+        /* INPUT DE TEXTO - CORRECCIÓN TOTAL DE CONTRASTE */
+        .stTextInput input {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important; /* Fix para Safari/iPhone */
+            caret-color: #eb0a1e;
+            font-weight: 900 !important;
+            font-size: 24px !important;
+            border: 3px solid var(--accent) !important;
+            text-align: center !important;
+            border-radius: 12px;
+            padding: 12px !important;
+        }}
+        /* Color del texto de ayuda (placeholder) */
+        .stTextInput input::placeholder {{
+            color: #aaaaaa !important;
+            -webkit-text-fill-color: #aaaaaa !important;
+            opacity: 1;
+        }}
+        
+        .big-price {{
+            color: var(--accent) !important;
+            font-size: clamp(40px, 12vw, 80px); 
+            font-weight: 900;
+            text-align: center;
+            line-height: 1.1;
+            margin: 10px 0;
+            text-shadow: 2px 2px 0px black !important;
+        }}
+        
+        /* --- BOTÓN ROJO (BUSCAR) --- */
+        button[kind="primary"] {{
+            background-color: #eb0a1e !important;
+            color: #ffffff !important;
+            border: 2px solid white !important;
+            font-weight: 900 !important;
+            font-size: 18px !important;
+            border-radius: 10px !important;
+            text-transform: uppercase;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+            height: 55px !important;
+            width: 100% !important;
+        }}
+        button[kind="primary"]:active {{ transform: scale(0.98); }}
+        
+        /* --- BOTÓN GRIS (LIMPIAR) --- */
+        button[kind="secondary"] {{
+            background-color: #e0e0e0 !important;
+            color: #333333 !important;
+            border: 2px solid #999 !important;
+            font-weight: 900 !important;
+            font-size: 24px !important; /* Ícono más grande */
+            border-radius: 10px !important;
+            height: 55px !important;
+            width: 100% !important;
+        }}
+        button[kind="secondary"]:hover {{
+            border-color: #eb0a1e !important;
+            color: #eb0a1e !important;
+        }}
 
-            /* Inputs Grandes y Claros */
-            .stTextInput input {
-                font-size: 22px !important;
-                font-weight: 800 !important;
-                text-align: center !important;
-                color: #000000 !important; /* Texto negro forzoso */
-                background-color: #ffffff !important;
-                border: 2px solid #eb0a1e !important; /* Borde Rojo Toyota */
-                border-radius: 10px;
-                padding: 10px !important;
-            }
-
-            /* Botones */
-            button[kind="primary"] {
-                background-color: #eb0a1e !important;
-                color: white !important;
-                font-weight: bold !important;
-                font-size: 18px !important;
-                border: none !important;
-                border-radius: 8px !important;
-                text-transform: uppercase;
-                height: 50px;
-            }
-            button[kind="secondary"] {
-                background-color: #f0f0f0 !important;
-                color: #333 !important;
-                border: 1px solid #ccc !important;
-                font-size: 20px !important;
-                height: 50px;
-            }
-
-            /* Imágenes */
-            div[data-testid="stImage"] {
-                background-color: white;
-                border-radius: 10px;
-                padding: 10px;
-                display: flex;
-                justify-content: center;
-                border: 1px solid #eee;
-            }
-            div[data-testid="stImage"] img {
-                max-height: 250px;
-                object-fit: contain;
-            }
-
-            /* Precios */
-            .precio-grande {
-                color: #eb0a1e;
-                font-size: 50px;
-                font-weight: 900;
-                text-align: center;
-                line-height: 1;
-                margin: 10px 0;
-            }
-            
-            /* Footer */
-            footer {visibility: hidden;}
-            .legal-text {
-                font-size: 10px;
-                color: #666;
-                text-align: justify;
-                margin-top: 20px;
-                border-top: 1px solid #ddd;
-                padding-top: 10px;
-            }
+        /* TARJETA TOTAL */
+        .total-card {{
+            background-color: var(--total-bg);
+            border-left: 6px solid var(--accent);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }}
+        .total-label {{
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--text-color) !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.8;
+        }}
+        .total-value {{
+            font-size: 32px;
+            font-weight: 900;
+            color: var(--text-color) !important;
+            margin-top: 5px;
+        }}
+        
+        #MainMenu, footer, header {{visibility: hidden;}}
+        .legal-footer {{
+            border-top: 1px solid {theme['footer_border']} !important;
+            opacity: 0.9;
+            font-size: 11px;
+            margin-top: 40px;
+            padding-top: 20px;
+            text-align: justify;
+            line-height: 1.4;
+        }}
         </style>
     """, unsafe_allow_html=True)
 
-inject_css()
+apply_dynamic_styles()
 
-# --- 5. LÓGICA DE NEGOCIO (IMAGEN Y TRADUCCIÓN) ---
+# --- 5. LÓGICA DE NEGOCIO ---
+
+@st.cache_data(show_spinner=False)
+def traducir_texto(texto):
+    try: return GoogleTranslator(source='auto', target='es').translate(texto)
+    except: return texto
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def buscar_imagen_web(sku):
-    """Busca imagen en web solo si no existe en BD"""
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+def obtener_imagen_clasica(sku):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    # 1. PARTSOUQ
     try:
-        # Intento 1: Partsouq
         url = f"https://partsouq.com/en/search/all?q={sku}"
-        r = requests.get(url, headers=headers, timeout=3)
+        r = requests.get(url, headers=headers, timeout=5)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             imgs = soup.select('table.table img')
             for i in imgs:
                 src = i.get('src', '')
                 if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
-                    return "https:" + src if src.startswith("//") else "https://partsouq.com" + src
-        
-        # Intento 2: Google (Fallback)
+                    if src.startswith("//"): return "https:" + src
+                    if src.startswith("/"): return "https://partsouq.com" + src
+                    return src
+    except: pass
+    # 2. GOOGLE
+    try:
         url_g = f"https://www.google.com/search?q=toyota+{sku}&tbm=isch"
-        r = requests.get(url_g, headers=headers, timeout=3)
+        r = requests.get(url_g, headers=headers, timeout=4)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             imgs = soup.find_all('img')
@@ -179,143 +309,142 @@ def buscar_imagen_web(sku):
                 src = img.get('src')
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
                     return src
-    except:
-        pass
+    except: pass
     return None
 
-def traducir_texto(texto):
-    try: return GoogleTranslator(source='auto', target='es').translate(texto)
-    except: return texto
+def buscar_producto_smart(sku_usuario):
+    if not supabase: return None
+    sku_limpio = sku_usuario.strip().upper().replace('-', '').replace(' ', '')
+    try:
+        response = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_limpio).execute()
+        if response.data: return response.data[0]
+        response_legacy = supabase.table('catalogo_toyota').select("*").ilike('item', sku_limpio).execute()
+        if response_legacy.data: return response_legacy.data[0]
+    except: pass
+    return None
 
-# --- 6. HEADER CON LOGO (CORREGIDO) ---
-col_logo, col_titulo = st.columns([1, 3])
+def guardar_datos_enriquecidos(sku_producto, img_url=None):
+    if img_url:
+        try:
+            supabase.table('catalogo_toyota').update({'img_url': img_url}).eq('item', sku_producto).execute()
+        except Exception:
+            pass 
 
-with col_logo:
-    # LÓGICA DEL LOGO: Busca el archivo local
-    if os.path.exists("logo.png"):
-        st.image("logo.png", use_container_width=True)
-    else:
-        # Fallback si no hay logo
-        st.markdown("<h1 style='text-align: center;'>🔴</h1>", unsafe_allow_html=True)
-
-with col_titulo:
+# --- 6. INTERFAZ: HEADER ---
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
     st.markdown(f"""
-        <div style="text-align: right; padding-top: 10px;">
-            <h3 style="margin:0; color:black;">TOYOTA LOS FUERTES</h3>
-            <span style="font-size: 14px; color: #555;">
-                {fecha_actual.strftime("%d/%m/%Y")} - {fecha_actual.strftime("%H:%M")}
-            </span>
-        </div>
+    <div style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 5px;">
+        LOS FUERTES<br>
+        {fecha_actual.strftime("%d/%m/%Y")} - {fecha_actual.strftime("%H:%M")}
+    </div>
     """, unsafe_allow_html=True)
+    if os.path.exists("logo.png"):
+        st.image("logo.png", use_container_width=True) 
+    else:
+        st.markdown("<h1 style='text-align: center;'>TOYOTA</h1>", unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown("<h3 style='text-align: center; font-weight: 800; color: #333;'>COTIZADOR DIGITAL</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; font-weight: 800;'>COTIZADOR DIGITAL</h3>", unsafe_allow_html=True)
 
-# --- 7. FORMULARIO DE BÚSQUEDA ---
+# --- 7. BUSCADOR ADAPTATIVO (Layout: Input Grande | Buscar | Limpiar Pequeño) ---
+
 def limpiar_busqueda():
     st.session_state.sku_input = ""
     st.session_state.busqueda_activa = ""
+    st.session_state.producto_actual = None
 
-# Contenedor para inputs
-c_in, c_go, c_del = st.columns([3, 1.2, 0.6], gap="small")
+with st.form(key='search_form'):
+    # Layout Proporcional: 3 partes Input, 1.2 partes Buscar, 0.5 partes Basura
+    c_input, c_search, c_clear = st.columns([3, 1.2, 0.5], gap="small")
+    
+    with c_input:
+        busqueda_input = st.text_input("SKU", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed", key="sku_input")
+        
+    with c_search:
+        # Botón Rojo
+        submit_btn = st.form_submit_button("BUSCAR 🔍", type="primary", use_container_width=True)
+        
+    with c_clear:
+        # Botón Gris (Basura)
+        clear_btn = st.form_submit_button("🗑️", type="secondary", use_container_width=True, on_click=limpiar_busqueda)
 
-with c_in:
-    sku_val = st.text_input("SKU", key="sku_input", placeholder="Ej. 90915-YZZD1", label_visibility="collapsed")
-
-with c_go:
-    if st.button("BUSCAR 🔍", type="primary", use_container_width=True):
-        st.session_state.busqueda_activa = sku_val
-
-with c_del:
-    st.button("🗑️", type="secondary", use_container_width=True, on_click=limpiar_busqueda)
-
+if submit_btn and busqueda_input:
+    st.session_state.busqueda_activa = busqueda_input
+    st.session_state.imagen_cache = None
 
 # --- 8. RESULTADOS ---
-if st.session_state.busqueda_activa and supabase:
-    sku_search = st.session_state.busqueda_activa.strip().upper()
-    sku_clean = sku_search.replace('-', '').replace(' ', '')
+if st.session_state.busqueda_activa:
+    busqueda = st.session_state.busqueda_activa
     
-    with st.spinner("Consultando catálogo..."):
-        # 1. Buscar producto
-        try:
-            # Primero busca exacto en sku_search
-            resp = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_clean).execute()
-            if not resp.data:
-                # Intenta like
-                resp = supabase.table('catalogo_toyota').select("*").ilike('item', f"%{sku_clean}%").limit(1).execute()
-            
-            datos = resp.data[0] if resp.data else None
-        except Exception as e:
-            datos = None
-            st.error(f"Error de conexión: {e}")
-
-    if datos:
-        # Extraer datos básicos
-        sku_real = datos.get('item', sku_search)
-        desc_raw = datos.get('descripcion', 'Sin descripción')
-        precio_base = float(datos.get('total_unitario', 0))
-        
-        # --- LÓGICA DE IMAGEN (CORREGIDA) ---
-        # 1. Intentar obtener img_url directo de Supabase
-        url_imagen = datos.get('img_url')
-
-        # 2. Si NO hay imagen en base de datos, buscar en web
-        if not url_imagen:
-            url_imagen = buscar_imagen_web(sku_real)
-            # 3. Si encontramos imagen nueva, guardarla en Supabase para el futuro
-            if url_imagen:
-                try:
-                    supabase.table('catalogo_toyota').update({'img_url': url_imagen}).eq('item', sku_real).execute()
-                except: pass
-        
-        # Traducción
-        desc_es = traducir_texto(desc_raw)
-        
-        # Mostrar Ficha
-        c_img, c_data = st.columns([1, 1.5])
-        
-        with c_img:
-            if url_imagen:
-                st.image(url_imagen, use_container_width=True)
-            else:
-                st.info("📷 Sin imagen disponible")
-
-        with c_data:
-            st.markdown(f"**SKU:** {sku_real}")
-            st.markdown(f"<div style='font-size: 18px; font-weight: bold; margin-bottom: 10px;'>{desc_es}</div>", unsafe_allow_html=True)
-            
-            try: precio_final = precio_base * 1.16
-            except: precio_final = 0.0
-            
-            if precio_final > 0:
-                st.markdown(f"<div class='precio-grande'>${precio_final:,.2f}</div>", unsafe_allow_html=True)
-                st.markdown("<div style='text-align: center; font-size: 12px; font-weight: bold;'>Precio Unitario (IVA Incluido)</div>", unsafe_allow_html=True)
-            else:
-                st.warning("Precio no disponible")
-
-        # Calculadora rápida
-        if precio_final > 0:
-            st.markdown("---")
-            col_qty, col_tot = st.columns([1, 2])
-            with col_qty:
-                qty = st.number_input("Cantidad", min_value=1, value=1)
-            with col_tot:
-                total = precio_final * qty
-                st.markdown(f"""
-                    <div style="background-color: #f8f9fa; border-left: 5px solid #eb0a1e; padding: 10px; border-radius: 5px; text-align: center;">
-                        <span style="font-weight: bold;">TOTAL NETO ({qty} Pzas)</span><br>
-                        <span style="font-size: 24px; font-weight: 900;">${total:,.2f}</span>
-                    </div>
-                """, unsafe_allow_html=True)
-
+    if not supabase:
+        st.error("❌ Sin conexión a base de datos.")
     else:
-        st.error(f"❌ El código {sku_search} no fue encontrado.")
+        with st.spinner("Consultando sistema..."):
+            producto = buscar_producto_smart(busqueda)
+            
+            if producto:
+                sku_val = producto.get('item', busqueda) 
+                desc_raw = producto.get('descripcion', 'Sin descripción')
+                precio_base = float(producto.get('total_unitario', 0))
+                
+                url_imagen = producto.get('img_url') 
+                if not url_imagen:
+                    if not st.session_state.imagen_cache:
+                        url_imagen = obtener_imagen_clasica(sku_val)
+                        st.session_state.imagen_cache = url_imagen
+                        guardar_datos_enriquecidos(sku_val, url_imagen)
+                    else:
+                        url_imagen = st.session_state.imagen_cache
+                
+                # Traducción forzosa
+                desc_es = traducir_texto(desc_raw)
+                
+                try: final_unitario = precio_base * 1.16
+                except: final_unitario = 0.0
+
+                if url_imagen:
+                    st.image(url_imagen, caption="Ilustración Referencial", use_container_width=True)
+                else:
+                    st.info("📷 Imagen no disponible digitalmente.")
+
+                st.markdown(f"<div class='sku-display' style='text-align: center; margin-top: 10px;'>{sku_val}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 25px;'>{desc_es}</div>", unsafe_allow_html=True)
+                
+                if final_unitario > 0:
+                    st.markdown(f"<div class='big-price'>${final_unitario:,.2f}</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='text-align: center; font-size: 14px; font-weight: bold;'>Precio Unitario (IVA Incluido)</div>", unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+                    
+                    c1, c2 = st.columns([1, 1])
+                    with c1:
+                        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+                        cantidad = st.number_input("Cantidad:", min_value=1, value=1, step=1)
+                    with c2:
+                        total_calculado = final_unitario * cantidad
+                        st.markdown(f"""
+                        <div class="total-card">
+                            <div class="total-label">Total Neto ({int(cantidad)} Pzas)</div>
+                            <div class="total-value">${total_calculado:,.2f}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.warning("Precio no disponible.")
+            else:
+                st.error("❌ CÓDIGO NO ENCONTRADO")
 
 # --- 9. FOOTER ---
+st.markdown("---")
 st.markdown(f"""
-    <div class="legal-text">
-        <strong>INFORMACIÓN LEGAL:</strong> Precios válidos al {fecha_actual.strftime("%d/%m/%Y %H:%M")}. 
-        Incluye IVA (16%). Las imágenes son referenciales obtenidas de catálogos internacionales.
-        Verificar compatibilidad física antes de la compra.
-    </div>
+<div class="legal-footer">
+    <strong>INFORMACIÓN COMERCIAL Y MARCO LEGAL</strong><br>
+    La información de precios mostrada en este verificador digital cumple estrictamente con las disposiciones legales vigentes en los Estados Unidos Mexicanos:
+    <br><br>
+    <strong>1. PRECIO TOTAL A PAGAR (LFPC Art. 7 Bis):</strong> En cumplimiento con la Ley Federal de Protección al Consumidor, el precio exhibido representa el monto final e inequívoco a pagar por el consumidor. Este importe incluye el costo del producto, el Impuesto al Valor Agregado (IVA del 16%) y cualquier cargo administrativo aplicable, evitando prácticas comerciales engañosas.
+    <br><br>
+    <strong>2. VIGENCIA Y EXACTITUD (NOM-174-SCFI-2007):</strong> El precio mostrado es válido exclusivamente al momento de la consulta (Timbre digital: <strong>{fecha_actual.strftime("%d/%m/%Y %H:%M:%S")}</strong>). Toyota Los Fuertes garantiza el respeto al precio exhibido al momento de la transacción conforme a lo dispuesto en las Normas Oficiales Mexicanas sobre prácticas comerciales en transacciones electrónicas y de información.
+    <br><br>
+    <strong>3. INFORMACIÓN COMERCIAL (NOM-050-SCFI-2004):</strong> La descripción y especificaciones de las partes cumplen con los requisitos de información comercial general para productos destinados a consumidores en el territorio nacional. Las imágenes mostradas son ilustrativas y provienen de catálogos internacionales (PartSouq / Google / eBay), pueden diferir del producto real.
+</div>
 """, unsafe_allow_html=True)
