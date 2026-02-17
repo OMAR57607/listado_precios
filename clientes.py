@@ -268,7 +268,7 @@ with c2:
         </style>
 
         <div class="header-title">
-            <strong style="font-size: 2.5rem; text-transform:uppercase; line-height: 1;">COTIZADOR DIGITAL TOYOTA</strong><br>
+            <strong style="font-size: 2.5rem; text-transform:uppercase; line-height: 1;">VERIFICADOR DIGITAL DE PRECIOS TOYOTA</strong><br>
             <span style="font-size: 1.1rem; opacity: 0.8;">{fecha_actual.strftime("%d/%m/%Y - %H:%M")}</span>
         </div>
     """, unsafe_allow_html=True)
