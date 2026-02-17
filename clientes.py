@@ -388,4 +388,4 @@ st.markdown(f"""
         <br><br>
         <strong>3. INFORMACIÓN COMERCIAL (Art. 32 LFPC):</strong> Las imágenes mostradas tienen fines ilustrativos y de referencia técnica visual; provienen de catálogos globales y pueden diferir ligeramente de la presentación física del producto en inventario. La compatibilidad debe verificarse mediante número de serie (VIN).
     </div>
-""", unsafe_allow_html=True)llow_html=True)
+""", unsafe_allow_html=True)
