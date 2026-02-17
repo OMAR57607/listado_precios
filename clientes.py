@@ -45,156 +45,138 @@ def obtener_hora_mx():
 
 fecha_actual = obtener_hora_mx()
 
-# --- 4. MOTOR DE TEMAS (UX VISUAL) ---
-def get_theme_styles(hour):
-    """Devuelve variables CSS basadas en la hora del día (Psicología del color)"""
-    if 6 <= hour < 12: # MAÑANA: Fresco, azulado, inspirador
+# --- 4. TEMAS VISUALES (DINÁMICOS Y ADAPTATIVOS) ---
+def get_theme_by_time(date):
+    h = date.hour
+    # TEMA DE DÍA (06:00 - 18:59) -> Fondo Claro / Texto Oscuro
+    if 6 <= h < 19:
         return {
-            "bg_gradient": "linear-gradient(135deg, #E0F7FA 0%, #FFFFFF 100%)",
+            "bg_gradient": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
             "card_bg": "rgba(255, 255, 255, 0.95)",
-            "text_color": "#111111",
-            "accent": "#EB0A1E", # Toyota Red
-            "input_bg": "#FFFFFF",
-            "shadow": "0 10px 30px rgba(0,0,0,0.08)"
+            "text_color": "#000000",             # Texto NEGRO
+            "accent_color": "#eb0a1e",
+            "input_bg": "#ffffff",               # Input BLANCO
+            "input_text": "#000000",             # Escribes en NEGRO
+            "btn_sec_bg": "#f0f0f0",             # Botón limpiar GRIS CLARO
+            "btn_sec_text": "#333333",           # Icono basurero GRIS OSCURO
+            "btn_border": "#cccccc"
         }
-    elif 12 <= hour < 19: # TARDE: Alto contraste, productivo, blanco puro
+    # TEMA DE NOCHE (19:00 - 05:59) -> Fondo Oscuro / Texto Claro
+    else:
         return {
-            "bg_gradient": "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
-            "card_bg": "rgba(255, 255, 255, 0.98)",
-            "text_color": "#000000",
-            "accent": "#CC0000", 
-            "input_bg": "#FFFFFF",
-            "shadow": "0 10px 30px rgba(0,0,0,0.15)"
-        }
-    else: # NOCHE: Modo oscuro 'Carbono', descansa la vista
-        return {
-            "bg_gradient": "linear-gradient(to bottom, #0f2027, #203a43, #2c5364)",
-            "card_bg": "rgba(20, 20, 20, 0.95)",
-            "text_color": "#FFFFFF",
-            "accent": "#FF4D4D", # Rojo más brillante para fondo oscuro
-            "input_bg": "#e0e0e0", # Input claro para legibilidad
-            "shadow": "0 10px 30px rgba(0,0,0,0.5)"
+            "bg_gradient": "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
+            "card_bg": "rgba(20, 20, 20, 0.90)", # Tarjeta OSCURA
+            "text_color": "#FFFFFF",             # Texto BLANCO
+            "accent_color": "#ff4d4d",           # Rojo brillante
+            "input_bg": "rgba(255, 255, 255, 0.1)", # Input TRANSPARENTE OSCURO
+            "input_text": "#FFFFFF",             # Escribes en BLANCO
+            "btn_sec_bg": "rgba(255, 255, 255, 0.1)", # Botón limpiar TRANSPARENTE
+            "btn_sec_text": "#FFFFFF",           # Icono basurero BLANCO
+            "btn_border": "#555555"
         }
 
-def inject_dynamic_css():
-    theme = get_theme_styles(fecha_actual.hour)
+def apply_dynamic_styles():
+    theme = get_theme_by_time(fecha_actual)
     
     st.markdown(f"""
         <style>
-            /* --- VARIABLES CSS DINÁMICAS --- */
-            :root {{
-                --bg-gradient: {theme['bg_gradient']};
-                --card-bg: {theme['card_bg']};
-                --text-color: {theme['text_color']};
-                --accent: {theme['accent']};
-                --shadow: {theme['shadow']};
-            }}
+        :root {{
+            --main-text: {theme['text_color']};
+            --card-bg: {theme['card_bg']};
+            --accent: {theme['accent_color']};
+            --input-bg: {theme['input_bg']};
+            --input-text: {theme['input_text']};
+            --btn-sec-bg: {theme['btn_sec_bg']};
+            --btn-sec-text: {theme['btn_sec_text']};
+            --btn-border: {theme['btn_border']};
+        }}
+        
+        /* FONDO PRINCIPAL */
+        .stApp {{
+            background-image: {theme['bg_gradient']};
+            background-attachment: fixed;
+        }}
+        
+        /* TARJETA CONTENEDORA */
+        [data-testid="stBlockContainer"] {{
+            background-color: var(--card-bg);
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 700px;
+        }}
+        
+        /* TEXTOS (Se adaptan automáticamente) */
+        h1, h2, h3, h4, p, span, div, label {{
+            color: var(--main-text) !important;
+            font-family: sans-serif;
+        }}
+        
+        /* --- INPUTS (ADAPTABLES) --- */
+        .stTextInput input {{
+            background-color: var(--input-bg) !important;
+            color: var(--input-text) !important;
+            caret-color: var(--accent); /* El cursor parpadeante es rojo */
+            border: 2px solid var(--accent) !important;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 24px !important;
+            font-weight: bold !important;
+        }}
+        /* Color del placeholder (ej. "90915...") */
+        .stTextInput input::placeholder {{
+            color: var(--main-text) !important;
+            opacity: 0.5;
+        }}
 
-            /* APLICACIÓN GENERAL */
-            .stApp {{
-                background-image: var(--bg-gradient);
-                background-attachment: fixed;
-            }}
-            
-            h1, h2, h3, h4, p, div, span, label {{
-                color: var(--text-color) !important;
-                font-family: 'Segoe UI', Roboto, sans-serif;
-            }}
+        /* --- BOTÓN ROJO (BUSCAR) --- */
+        button[kind="primary"] {{
+            background-color: var(--accent) !important;
+            color: #ffffff !important; /* Siempre blanco en el botón rojo */
+            border: none !important;
+            font-weight: 800 !important;
+            text-transform: uppercase;
+            border-radius: 8px !important;
+            height: 50px !important;
+            transition: 0.2s;
+        }}
+        button[kind="primary"]:hover {{ opacity: 0.9; }}
 
-            /* CONTENEDOR PRINCIPAL (TARJETA FLOTANTE) */
-            [data-testid="stBlockContainer"] {{
-                background-color: var(--card-bg);
-                border-radius: 20px;
-                padding: 2rem;
-                box-shadow: var(--shadow);
-                margin-top: 20px;
-                border: 1px solid rgba(128,128,128, 0.1);
-            }}
+        /* --- BOTÓN GRIS/OSCURO (LIMPIAR/CERRAR) --- */
+        button[kind="secondary"] {{
+            background-color: var(--btn-sec-bg) !important;
+            color: var(--btn-sec-text) !important;
+            border: 1px solid var(--btn-border) !important;
+            font-size: 20px !important;
+            border-radius: 8px !important;
+            height: 50px !important;
+        }}
+        button[kind="secondary"]:hover {{
+            border-color: var(--accent) !important;
+            color: var(--accent) !important;
+        }}
 
-            /* INPUT DE BÚSQUEDA (UX CRÍTICO) */
-            .stTextInput input {{
-                font-size: 22px !important;
-                font-weight: 900 !important;
-                text-align: center !important;
-                color: #000000 !important; /* Siempre negro para legibilidad */
-                background-color: {theme['input_bg']} !important;
-                border: 3px solid var(--accent) !important;
-                border-radius: 12px;
-                padding: 12px;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }}
-            .stTextInput input:focus {{
-                box-shadow: 0 0 0 3px rgba(235, 10, 30, 0.3);
-                outline: none;
-            }}
+        /* IMAGEN (Siempre fondo blanco suave para que se vea bien) */
+        div[data-testid="stImage"] {{
+            background-color: rgba(255,255,255, 0.95);
+            border-radius: 10px;
+            padding: 10px;
+        }}
 
-            /* BOTONES */
-            button[kind="primary"] {{
-                background-color: var(--accent) !important;
-                color: white !important;
-                font-weight: 800 !important;
-                text-transform: uppercase;
-                border-radius: 10px !important;
-                height: 52px !important;
-                transition: transform 0.1s;
-                border: none !important;
-            }}
-            button[kind="primary"]:active {{ transform: scale(0.98); }}
-
-            button[kind="secondary"] {{
-                background-color: #f0f0f0 !important;
-                color: #333 !important;
-                border: 1px solid #ccc !important;
-                border-radius: 10px !important;
-                height: 52px !important;
-            }}
-
-            /* IMÁGENES (FIX FONDO BLANCO) */
-            div[data-testid="stImage"] {{
-                background-color: white; /* Siempre blanco para ver PNGs transparentes */
-                border-radius: 15px;
-                padding: 15px;
-                box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
-            }}
-            div[data-testid="stImage"] img {{
-                max-height: 280px;
-                object-fit: contain;
-            }}
-
-            /* PRECIOS Y TOTALES */
-            .big-price {{
-                color: var(--accent);
-                font-size: clamp(36px, 6vw, 60px); /* Responsivo */
-                font-weight: 900;
-                text-align: center;
-                text-shadow: 0px 2px 4px rgba(0,0,0,0.1);
-                line-height: 1.1;
-                margin-top: 10px;
-            }}
-
-            .total-card {{
-                background: rgba(128,128,128, 0.1);
-                border-left: 6px solid var(--accent);
-                padding: 15px;
-                border-radius: 8px;
-                text-align: center;
-                margin-top: 10px;
-            }}
-
-            #MainMenu, footer, header {{ visibility: hidden; }}
-            .footer-legal {{
-                font-size: 0.7rem;
-                opacity: 0.7;
-                text-align: justify;
-                margin-top: 30px;
-                border-top: 1px solid rgba(128,128,128,0.3);
-                padding-top: 15px;
-            }}
+        /* FOOTER Y EXTRAS */
+        #MainMenu, footer, header {{visibility: hidden;}}
+        
+        .big-price {{
+            color: var(--accent);
+            font-size: 50px;
+            font-weight: 900;
+            text-align: center;
+            margin-top: 10px;
+        }}
         </style>
     """, unsafe_allow_html=True)
 
-inject_dynamic_css()
-
+apply_dynamic_styles()
 # --- 5. LÓGICA OPTIMIZADA (CORE) ---
 
 @st.cache_data(ttl=3600, show_spinner=False)
