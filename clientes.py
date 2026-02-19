@@ -77,15 +77,16 @@ def get_theme_by_time(date):
     else:
         return {
             "bg_gradient": "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
-            "card_bg": "rgba(20, 20, 20, 0.90)", # Tarjeta OSCURA
+            "card_bg": "#121212", # Tarjeta OSCURA
             "text_color": "#FFFFFF",             # Texto BLANCO
             "accent_color": "#ff4d4d",           # Rojo brillante
-            "input_bg": "rgba(255, 255, 255, 0.1)", # Input TRANSPARENTE OSCURO
+            "input_bg": "#1e1e1e", # Input TRANSPARENTE OSCURO
             "input_text": "#FFFFFF",             # Escribes en BLANCO
-            "btn_sec_bg": "rgba(255, 255, 255, 0.1)", # Botón limpiar TRANSPARENTE
+            "btn_sec_bg": "#2d2d2d", # Botón limpiar TRANSPARENTE
             "btn_sec_text": "#FFFFFF",           # Icono basurero BLANCO
-            "btn_border": "#555555",
-            "shadow": "0 10px 30px rgba(0,0,0,0.5)"
+            "btn_border": "#444444",
+            "shadow": "0 10px 30px rgba(0,0,0,0.8)",
+            "scheme": "dark"
         }
 
 def apply_dynamic_styles():
