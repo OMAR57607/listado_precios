@@ -337,7 +337,7 @@ if not st.session_state.sku_search:
         <div style='text-align: center; opacity: 0.5; margin-top: 50px; margin-bottom: 50px;'>
             <h1 style='font-size: 4rem; margin-bottom: 0;'>🔍</h1>
             <h3>Listo para buscar</h3>
-            <p>Ingresa un código de pieza (SKU) para consultar precio, imagen y disponibilidad.</p>
+            <p>Ingresa un código de pieza (SKU) para consultar precio e imagen.</p>
         </div>
     """, unsafe_allow_html=True)
 
