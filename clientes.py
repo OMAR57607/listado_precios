@@ -236,8 +236,25 @@ apply_dynamic_styles()
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_imagen_web(sku: str):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    
+    # 1. Toyota OEM Parts Online (Prioridad 1)
     try:
-        # Partsouq
+        r = requests.get(f"https://toyota.oempartsonline.com/search?search_str={sku}", headers=headers, timeout=3)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            # Buscamos la imagen del catálogo
+            imagen = soup.find('img', class_='img-responsive') 
+            if imagen and imagen.get('src'):
+                src = imagen.get('src')
+                # Si la ruta es relativa, le agregamos el dominio principal
+                if src.startswith('/'):
+                    return f"https://toyota.oempartsonline.com{src}"
+                return src
+    except Exception:
+        pass
+
+    # 2. Partsouq (Prioridad 2)
+    try:
         r = requests.get(f"https://partsouq.com/en/search/all?q={sku}", headers=headers, timeout=3)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
@@ -248,7 +265,7 @@ def buscar_imagen_web(sku: str):
     except Exception:
         pass
     
-    # Google Fallback
+    # 3. Google Fallback (Prioridad 3)
     try:
         r = requests.get(f"https://www.google.com/search?q=toyota+{sku}&tbm=isch", headers=headers, timeout=3)
         if r.status_code == 200:
@@ -268,7 +285,6 @@ def traducir(texto: str) -> str:
         return GoogleTranslator(source='auto', target='es').translate(texto)
     except Exception:
         return texto
-
 # --- 6. INTERFAZ GRÁFICA ---
 
 # Header
