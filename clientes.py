@@ -28,7 +28,7 @@ def get_secret(key):
         pass
     return None
 
-# Inicializar Sentry (Captura de errores activa)
+# Inicializar Sentry (Captura de errores activa solo en entorno global)
 sentry_dsn = get_secret("SENTRY_DSN")
 if sentry_dsn:
     try:
@@ -76,12 +76,12 @@ def get_theme_by_time(date):
         return {
             "bg_gradient": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
             "card_bg": "rgba(255, 255, 255, 0.95)",
-            "text_color": "#000000",             # Texto NEGRO
-            "accent_color": "#eb0a1e",           # Rojo Toyota
-            "input_bg": "#ffffff",               # Input BLANCO
-            "input_text": "#000000",             # Escribes en NEGRO
-            "btn_sec_bg": "#f0f0f0",             # Botón limpiar GRIS CLARO
-            "btn_sec_text": "#333333",           # Icono basurero GRIS OSCURO
+            "text_color": "#000000",
+            "accent_color": "#eb0a1e",
+            "input_bg": "#ffffff",
+            "input_text": "#000000",
+            "btn_sec_bg": "#f0f0f0",
+            "btn_sec_text": "#333333",
             "btn_border": "#cccccc",
             "shadow": "0 10px 30px rgba(0,0,0,0.1)"
         }
@@ -89,13 +89,13 @@ def get_theme_by_time(date):
     else:
         return {
             "bg_gradient": "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
-            "card_bg": "#121212",                # Tarjeta OSCURA
-            "text_color": "#FFFFFF",             # Texto BLANCO
-            "accent_color": "#ff4d4d",           # Rojo brillante
-            "input_bg": "#1e1e1e",               # Input TRANSPARENTE OSCURO
-            "input_text": "#FFFFFF",             # Escribes en BLANCO
-            "btn_sec_bg": "#2d2d2d",             # Botón limpiar TRANSPARENTE
-            "btn_sec_text": "#FFFFFF",           # Icono basurero BLANCO
+            "card_bg": "#121212",
+            "text_color": "#FFFFFF",
+            "accent_color": "#ff4d4d",
+            "input_bg": "#1e1e1e",
+            "input_text": "#FFFFFF",
+            "btn_sec_bg": "#2d2d2d",
+            "btn_sec_text": "#FFFFFF",
             "btn_border": "#444444",
             "shadow": "0 10px 30px rgba(0,0,0,0.8)",
             "scheme": "dark"
@@ -118,13 +118,11 @@ def apply_dynamic_styles():
             --shadow: {theme['shadow']};
         }}
         
-        /* FONDO PRINCIPAL */
         .stApp {{
             background-image: {theme['bg_gradient']};
             background-attachment: fixed;
         }}
         
-        /* TARJETA CONTENEDORA */
         [data-testid="stBlockContainer"] {{
             background-color: var(--card-bg);
             border-radius: 15px;
@@ -134,13 +132,11 @@ def apply_dynamic_styles():
             margin-top: 20px;
         }}
         
-        /* TEXTOS (Se adaptan automáticamente) */
         h1, h2, h3, h4, p, span, div, label {{
             color: var(--main-text) !important;
             font-family: 'Segoe UI', sans-serif;
         }}
         
-        /* --- INPUTS (ADAPTABLES) --- */
         .stTextInput input {{
             background-color: var(--input-bg) !important;
             color: var(--input-text) !important;
@@ -157,7 +153,6 @@ def apply_dynamic_styles():
             opacity: 0.5;
         }}
 
-        /* --- BOTÓN ROJO (BUSCAR) --- */
         button[kind="primary"] {{
             background-color: var(--accent) !important;
             color: #ffffff !important;
@@ -170,7 +165,6 @@ def apply_dynamic_styles():
         }}
         button[kind="primary"]:hover {{ opacity: 0.9; transform: scale(0.99); }}
 
-        /* --- BOTÓN DE BASURA (VISIBLE EN MODO NOCHE) --- */
         button[kind="secondary"] {{
             background-color: var(--btn-sec-bg) !important;
             color: var(--btn-sec-text) !important;
@@ -184,7 +178,6 @@ def apply_dynamic_styles():
             color: var(--accent) !important;
         }}
 
-        /* IMAGEN (Siempre fondo blanco suave para ver PNGs transparentes) */
         div[data-testid="stImage"] {{
             background-color: #ffffff;
             border-radius: 15px;
@@ -192,7 +185,6 @@ def apply_dynamic_styles():
             box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
         }}
         
-        /* PRECIO GRANDE */
         .big-price {{
             color: var(--accent);
             font-size: clamp(40px, 5vw, 60px);
@@ -204,7 +196,6 @@ def apply_dynamic_styles():
 
         #MainMenu, footer, header {{visibility: hidden;}}
         
-        /* FOOTER LEGAL */
         .legal-footer {{
             font-size: 11px;
             opacity: 0.7;
@@ -220,6 +211,7 @@ apply_dynamic_styles()
 
 # --- 5. LÓGICA DE NEGOCIO ---
 
+# RETIRAMOS SENTRY DE LA FUNCIÓN CACHEADA PARA EVITAR EL CRASHEO
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_imagen_web(sku):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -233,9 +225,8 @@ def buscar_imagen_web(sku):
                 src = i.get('src', '')
                 if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
                     return "https:" + src if src.startswith("//") else ("https://partsouq.com" + src if src.startswith("/") else src)
-    except Exception as e:
-        if sentry_dsn:
-            sentry_sdk.capture_exception(e)
+    except Exception:
+        pass # Regresamos al pass seguro para no romper el decorador @st.cache_data
     
     # Google Fallback
     try:
@@ -245,9 +236,8 @@ def buscar_imagen_web(sku):
                 src = img.get('src')
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
                     return src
-    except Exception as e:
-        if sentry_dsn:
-            sentry_sdk.capture_exception(e)
+    except Exception:
+        pass
             
     return None
 
@@ -256,14 +246,11 @@ def traducir(texto):
         return "Sin descripción"
     try:
         return GoogleTranslator(source='auto', target='es').translate(texto)
-    except Exception as e:
-        if sentry_dsn:
-            sentry_sdk.capture_exception(e)
-        return texto
+    except Exception:
+        return texto # Mantenemos esto simple también
 
 # --- 6. INTERFAZ GRÁFICA ---
 
-# Header con Logo Local y Texto Adaptativo
 c1, c2 = st.columns([1.5, 3])
 
 with c1:
@@ -295,7 +282,6 @@ with c2:
 
 st.markdown("---")
 
-# Funciones de control
 def ejecutar_busqueda():
     st.session_state.sku_search = st.session_state.input_val
 
@@ -303,7 +289,6 @@ def limpiar():
     st.session_state.input_val = ""
     st.session_state.sku_search = ""
 
-# BARRA DE BÚSQUEDA
 col_in, col_btn, col_cls = st.columns([3, 1.2, 0.6], gap="small")
 
 with col_in:
@@ -329,9 +314,7 @@ if st.session_state.sku_search:
     else:
         with st.spinner("Buscando en catálogo..."):
             try:
-                # 1. Búsqueda Exacta
                 res = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_limpio).execute()
-                # 2. Búsqueda Flexible
                 if not res.data:
                     res = supabase.table('catalogo_toyota').select("*").ilike('item', f"%{sku_limpio}%").limit(1).execute()
                 
@@ -343,11 +326,9 @@ if st.session_state.sku_search:
                 st.error("Ocurrió un error al consultar el catálogo. Inténtalo de nuevo.")
 
             if producto:
-                # Datos del producto
                 sku_real = producto.get('item')
                 img_url = producto.get('img_url')
                 
-                # AUTO-OPTIMIZACIÓN: Si no hay imagen, buscarla y guardarla
                 if not img_url:
                     img_web = buscar_imagen_web(sku_real)
                     if img_web:
@@ -366,7 +347,6 @@ if st.session_state.sku_search:
                 except Exception: 
                     precio = 0
 
-                # MOSTRAR FICHA
                 st.markdown("---")
                 c_img, c_det = st.columns([1, 1.3])
                 
@@ -390,7 +370,6 @@ if st.session_state.sku_search:
                     else:
                         st.warning("Precio no disponible.")
 
-                # CALCULADORA
                 if precio > 0:
                     st.markdown("---")
                     c_q, c_t = st.columns([1, 2])
@@ -408,14 +387,14 @@ if st.session_state.sku_search:
             else:
                 st.error(f"❌ El código '{st.session_state.sku_search}' no se encuentra en el catálogo.")
 
-# --- 8. FOOTER LEGAL (CUMPLIMIENTO PROFECO / LFPC) ---
+# --- 8. FOOTER LEGAL ---
 st.markdown("---")
 st.markdown(f"""
     <style>
         .legal-footer {{
             font-family: 'Segoe UI', sans-serif;
             font-size: 11px;
-            color: var(--text-color); /* Se adapta al tema dinámico */
+            color: var(--text-color);
             opacity: 0.8;
             text-align: justify;
             line-height: 1.5;
