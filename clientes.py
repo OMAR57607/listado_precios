@@ -19,39 +19,51 @@ st.set_page_config(
 
 def get_secret(key):
     val = os.environ.get(key)
-    if val: return val
+    if val:
+        return val
     try:
-        if key in st.secrets: return st.secrets[key]
-    except: pass
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
     return None
 
-# Inicializar Sentry (Manejo de errores silencioso)
+# Inicializar Sentry (Captura de errores activa)
 sentry_dsn = get_secret("SENTRY_DSN")
 if sentry_dsn:
     try:
         sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=1.0)
-    except: pass
+    except Exception as e:
+        st.warning(f"Sentry no se pudo inicializar: {e}")
 
 # --- 2. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
     url = get_secret("SUPABASE_URL")
     key = get_secret("SUPABASE_KEY")
-    if not url or not key: return None
+    if not url or not key:
+        return None
     return create_client(url, key)
 
 try:
     supabase = init_supabase()
-except:
+except Exception as e:
     supabase = None
+    if sentry_dsn:
+        sentry_sdk.capture_exception(e)
+    st.error("Error crítico: No se pudo establecer conexión con la base de datos.")
 
 # --- 3. ESTADO Y TIEMPO ---
-if 'sku_search' not in st.session_state: st.session_state.sku_search = ""
-if 'input_val' not in st.session_state: st.session_state.input_val = ""
+if 'sku_search' not in st.session_state:
+    st.session_state.sku_search = ""
+if 'input_val' not in st.session_state:
+    st.session_state.input_val = ""
 
 def obtener_hora_mx():
-    try: return datetime.now(pytz.timezone('America/Mexico_City'))
-    except: return datetime.now()
+    try:
+        return datetime.now(pytz.timezone('America/Mexico_City'))
+    except Exception:
+        return datetime.now()
 
 fecha_actual = obtener_hora_mx()
 
@@ -77,12 +89,12 @@ def get_theme_by_time(date):
     else:
         return {
             "bg_gradient": "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
-            "card_bg": "#121212", # Tarjeta OSCURA
+            "card_bg": "#121212",                # Tarjeta OSCURA
             "text_color": "#FFFFFF",             # Texto BLANCO
             "accent_color": "#ff4d4d",           # Rojo brillante
-            "input_bg": "#1e1e1e", # Input TRANSPARENTE OSCURO
+            "input_bg": "#1e1e1e",               # Input TRANSPARENTE OSCURO
             "input_text": "#FFFFFF",             # Escribes en BLANCO
-            "btn_sec_bg": "#2d2d2d", # Botón limpiar TRANSPARENTE
+            "btn_sec_bg": "#2d2d2d",             # Botón limpiar TRANSPARENTE
             "btn_sec_text": "#FFFFFF",           # Icono basurero BLANCO
             "btn_border": "#444444",
             "shadow": "0 10px 30px rgba(0,0,0,0.8)",
@@ -161,7 +173,7 @@ def apply_dynamic_styles():
         /* --- BOTÓN DE BASURA (VISIBLE EN MODO NOCHE) --- */
         button[kind="secondary"] {{
             background-color: var(--btn-sec-bg) !important;
-            color: var(--btn-sec-text) !important; /* Aquí está la magia: Blanco de noche, Gris de día */
+            color: var(--btn-sec-text) !important;
             border: 1px solid var(--btn-border) !important;
             font-size: 22px !important;
             border-radius: 10px !important;
@@ -211,8 +223,9 @@ apply_dynamic_styles()
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_imagen_web(sku):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    
+    # Partsouq
     try:
-        # Partsouq
         r = requests.get(f"https://partsouq.com/en/search/all?q={sku}", headers=headers, timeout=3)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
@@ -220,7 +233,9 @@ def buscar_imagen_web(sku):
                 src = i.get('src', '')
                 if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
                     return "https:" + src if src.startswith("//") else ("https://partsouq.com" + src if src.startswith("/") else src)
-    except: pass
+    except Exception as e:
+        if sentry_dsn:
+            sentry_sdk.capture_exception(e)
     
     # Google Fallback
     try:
@@ -230,18 +245,26 @@ def buscar_imagen_web(sku):
                 src = img.get('src')
                 if src and src.startswith('http') and 'encrypted-tbn0' in src:
                     return src
-    except: pass
+    except Exception as e:
+        if sentry_dsn:
+            sentry_sdk.capture_exception(e)
+            
     return None
 
 def traducir(texto):
-    if not texto: return "Sin descripción"
-    try: return GoogleTranslator(source='auto', target='es').translate(texto)
-    except: return texto
+    if not texto:
+        return "Sin descripción"
+    try:
+        return GoogleTranslator(source='auto', target='es').translate(texto)
+    except Exception as e:
+        if sentry_dsn:
+            sentry_sdk.capture_exception(e)
+        return texto
 
 # --- 6. INTERFAZ GRÁFICA ---
 
 # Header con Logo Local y Texto Adaptativo
-c1, c2 = st.columns([1.5, 3]) # Mantenemos la proporción amplia para el logo
+c1, c2 = st.columns([1.5, 3])
 
 with c1:
     if os.path.exists("logo.png"):
@@ -252,22 +275,18 @@ with c1:
 with c2:
     st.markdown(f"""
         <style>
-        /* Estilo por defecto (Escritorio): Alineado a la derecha */
         .header-title {{
             text-align: right;
             padding-top: 15px;
         }}
-        
-        /* Estilo para Celulares (Pantallas menores a 768px) */
         @media (max-width: 768px) {{
             .header-title {{
-                text-align: center !important; /* Forzar centrado */
-                margin-top: -10px;         /* Subirlo un poco para pegarlo al logo */
+                text-align: center !important;
+                margin-top: -10px;
                 padding-bottom: 10px;
             }}
         }}
         </style>
-
         <div class="header-title">
             <strong style="font-size: 2.5rem; text-transform:uppercase; line-height: 1;">VERIFICADOR DIGITAL DE PRECIOS TOYOTA</strong><br>
             <span style="font-size: 1.1rem; opacity: 0.8;">{fecha_actual.strftime("%d/%m/%Y - %H:%M")}</span>
@@ -298,7 +317,6 @@ with col_btn:
     st.button("BUSCAR", type="primary", use_container_width=True, on_click=ejecutar_busqueda)
 
 with col_cls:
-    # EL BOTE DE BASURA REGRESÓ AQUÍ
     st.button("🗑️", type="secondary", use_container_width=True, on_click=limpiar)
 
 
@@ -318,8 +336,11 @@ if st.session_state.sku_search:
                     res = supabase.table('catalogo_toyota').select("*").ilike('item', f"%{sku_limpio}%").limit(1).execute()
                 
                 producto = res.data[0] if res.data else None
-            except:
+            except Exception as e:
                 producto = None
+                if sentry_dsn:
+                    sentry_sdk.capture_exception(e)
+                st.error("Ocurrió un error al consultar el catálogo. Inténtalo de nuevo.")
 
             if producto:
                 # Datos del producto
@@ -333,13 +354,17 @@ if st.session_state.sku_search:
                         img_url = img_web
                         try:
                             supabase.table('catalogo_toyota').update({'img_url': img_web}).eq('item', sku_real).execute()
-                        except: pass
+                        except Exception as e:
+                            if sentry_dsn:
+                                sentry_sdk.capture_exception(e)
                 
                 desc_en = producto.get('descripcion', 'Sin descripción')
                 desc_es = traducir(desc_en)
                 
-                try: precio = float(producto.get('total_unitario', 0)) * 1.16
-                except: precio = 0
+                try: 
+                    precio = float(producto.get('total_unitario', 0)) * 1.16
+                except Exception: 
+                    precio = 0
 
                 # MOSTRAR FICHA
                 st.markdown("---")
