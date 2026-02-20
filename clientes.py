@@ -237,7 +237,19 @@ apply_dynamic_styles()
 def buscar_imagen_web(sku: str):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     
-    # 1. Toyota OEM Parts Online (Prioridad 1)
+    # 1. Partsouq (Prioridad 1)
+    try:
+        r = requests.get(f"https://partsouq.com/en/search/all?q={sku}", headers=headers, timeout=3)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            for i in soup.select('table.table img'):
+                src = i.get('src', '')
+                if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
+                    return "https:" + src if src.startswith("//") else ("https://partsouq.com" + src if src.startswith("/") else src)
+    except Exception:
+        pass
+
+    # 2. Toyota OEM Parts Online (Prioridad 2)
     try:
         r = requests.get(f"https://toyota.oempartsonline.com/search?search_str={sku}", headers=headers, timeout=3)
         if r.status_code == 200:
@@ -250,18 +262,6 @@ def buscar_imagen_web(sku: str):
                 if src.startswith('/'):
                     return f"https://toyota.oempartsonline.com{src}"
                 return src
-    except Exception:
-        pass
-
-    # 2. Partsouq (Prioridad 2)
-    try:
-        r = requests.get(f"https://partsouq.com/en/search/all?q={sku}", headers=headers, timeout=3)
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            for i in soup.select('table.table img'):
-                src = i.get('src', '')
-                if src and ('/tesseract/' in src or '/assets/' in src) and 'no-image' not in src:
-                    return "https:" + src if src.startswith("//") else ("https://partsouq.com" + src if src.startswith("/") else src)
     except Exception:
         pass
     
@@ -285,6 +285,7 @@ def traducir(texto: str) -> str:
         return GoogleTranslator(source='auto', target='es').translate(texto)
     except Exception:
         return texto
+        
 # --- 6. INTERFAZ GRÁFICA ---
 
 # Header
