@@ -74,12 +74,12 @@ def get_theme_by_time(date: datetime) -> dict:
         return {
             "bg_gradient": "linear-gradient(180deg, #E0F7FA 0%, #FFFFFF 100%)",
             "card_bg": "rgba(255, 255, 255, 0.95)",
-            "text_color": "#000000",             # Texto NEGRO
-            "accent_color": "#eb0a1e",           # Rojo Toyota
-            "input_bg": "#ffffff",               # Input BLANCO
-            "input_text": "#000000",             # Escribes en NEGRO
-            "btn_sec_bg": "#f0f0f0",             # Botón limpiar GRIS CLARO
-            "btn_sec_text": "#333333",           # Icono basurero GRIS OSCURO
+            "text_color": "#000000",             
+            "accent_color": "#eb0a1e",           
+            "input_bg": "#ffffff",               
+            "input_text": "#000000",             
+            "btn_sec_bg": "#f0f0f0",             
+            "btn_sec_text": "#333333",           
             "btn_border": "#cccccc",
             "shadow": "0 10px 30px rgba(0,0,0,0.1)"
         }
@@ -87,13 +87,13 @@ def get_theme_by_time(date: datetime) -> dict:
     else:
         return {
             "bg_gradient": "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
-            "card_bg": "#121212",                # Tarjeta OSCURA
-            "text_color": "#FFFFFF",             # Texto BLANCO
-            "accent_color": "#ff4d4d",           # Rojo brillante
-            "input_bg": "#1e1e1e",               # Input TRANSPARENTE OSCURO
-            "input_text": "#FFFFFF",             # Escribes en BLANCO
-            "btn_sec_bg": "#2d2d2d",             # Botón limpiar TRANSPARENTE
-            "btn_sec_text": "#FFFFFF",           # Icono basurero BLANCO
+            "card_bg": "#121212",                
+            "text_color": "#FFFFFF",             
+            "accent_color": "#ff4d4d",           
+            "input_bg": "#1e1e1e",               
+            "input_text": "#FFFFFF",             
+            "btn_sec_bg": "#2d2d2d",             
+            "btn_sec_text": "#FFFFFF",           
             "btn_border": "#444444",
             "shadow": "0 10px 30px rgba(0,0,0,0.8)",
             "scheme": "dark"
@@ -104,6 +104,8 @@ def apply_dynamic_styles():
     
     st.markdown(f"""
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800;900&display=swap');
+
         :root {{
             --main-text: {theme['text_color']};
             --card-bg: {theme['card_bg']};
@@ -114,6 +116,21 @@ def apply_dynamic_styles():
             --btn-sec-text: {theme['btn_sec_text']};
             --btn-border: {theme['btn_border']};
             --shadow: {theme['shadow']};
+        }}
+        
+        /* TIPOGRAFÍA CORPORATIVA */
+        h1, h2, h3, h4, p, span, div, label, input, button {{
+            font-family: 'Montserrat', sans-serif !important;
+        }}
+
+        /* ANIMACIÓN DE ENTRADA SUAVE */
+        @keyframes slideUpFade {{
+            from {{ opacity: 0; transform: translateY(20px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        .resultado-container {{
+            animation: slideUpFade 0.4s ease-out forwards;
         }}
         
         /* FONDO PRINCIPAL */
@@ -132,13 +149,12 @@ def apply_dynamic_styles():
             margin-top: 20px;
         }}
         
-        /* TEXTOS (Se adaptan automáticamente) */
+        /* TEXTOS */
         h1, h2, h3, h4, p, span, div, label {{
             color: var(--main-text) !important;
-            font-family: 'Segoe UI', sans-serif;
         }}
         
-        /* --- INPUTS (ADAPTABLES) --- */
+        /* --- INPUTS --- */
         .stTextInput input {{
             background-color: var(--input-bg) !important;
             color: var(--input-text) !important;
@@ -155,7 +171,7 @@ def apply_dynamic_styles():
             opacity: 0.5;
         }}
 
-        /* --- BOTÓN ROJO (BUSCAR) --- */
+        /* --- BOTONES --- */
         button[kind="primary"] {{
             background-color: var(--accent) !important;
             color: #ffffff !important;
@@ -168,7 +184,6 @@ def apply_dynamic_styles():
         }}
         button[kind="primary"]:hover {{ opacity: 0.9; transform: scale(0.99); }}
 
-        /* --- BOTÓN DE BASURA (VISIBLE EN MODO NOCHE) --- */
         button[kind="secondary"] {{
             background-color: var(--btn-sec-bg) !important;
             color: var(--btn-sec-text) !important; 
@@ -182,7 +197,7 @@ def apply_dynamic_styles():
             color: var(--accent) !important;
         }}
 
-        /* IMAGEN (Siempre fondo blanco suave para ver PNGs transparentes) */
+        /* IMAGEN */
         div[data-testid="stImage"] {{
             background-color: #ffffff;
             border-radius: 15px;
@@ -256,7 +271,7 @@ def traducir(texto: str) -> str:
 
 # --- 6. INTERFAZ GRÁFICA ---
 
-# Header con Logo Local y Texto Adaptativo
+# Header
 c1, c2 = st.columns([1.5, 3])
 
 with c1:
@@ -268,13 +283,10 @@ with c1:
 with c2:
     st.markdown(f"""
         <style>
-        /* Estilo por defecto (Escritorio): Alineado a la derecha */
         .header-title {{
             text-align: right;
             padding-top: 15px;
         }}
-        
-        /* Estilo para Celulares (Pantallas menores a 768px) */
         @media (max-width: 768px) {{
             .header-title {{
                 text-align: center !important; 
@@ -283,7 +295,6 @@ with c2:
             }}
         }}
         </style>
-
         <div class="header-title">
             <strong style="font-size: 2.5rem; text-transform:uppercase; line-height: 1;">VERIFICADOR DIGITAL DE PRECIOS TOYOTA</strong><br>
             <span style="font-size: 1.1rem; opacity: 0.8;">{fecha_actual.strftime("%d/%m/%Y - %H:%M")}</span>
@@ -307,20 +318,30 @@ with col_in:
     st.text_input(
         "Ingrese SKU", 
         key="input_val", 
-        placeholder="Ej. 90915-YZZD1", 
+        placeholder="🔍 Ej. 90915-YZZD1", 
         label_visibility="collapsed", 
         on_change=ejecutar_busqueda
     )
 
 with col_btn:
-    st.button("BUSCAR", type="primary", use_container_width=True, on_click=ejecutar_busqueda)
+    st.button("🔍 BUSCAR", type="primary", use_container_width=True, on_click=ejecutar_busqueda)
 
 with col_cls:
     st.button("🗑️", type="secondary", use_container_width=True, on_click=limpiar)
 
 
-# --- 7. RESULTADOS ---
-if st.session_state.sku_search:
+# --- 7. RESULTADOS Y ESTADO VACÍO ---
+if not st.session_state.sku_search:
+    # ESTADO VACÍO (Welcome Screen)
+    st.markdown("""
+        <div style='text-align: center; opacity: 0.5; margin-top: 50px; margin-bottom: 50px;'>
+            <h1 style='font-size: 4rem; margin-bottom: 0;'>🔍</h1>
+            <h3>Listo para buscar</h3>
+            <p>Ingresa un código de pieza (SKU) para consultar precio, imagen y disponibilidad.</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+elif st.session_state.sku_search:
     sku_limpio = st.session_state.sku_search.strip().upper().replace('-', '').replace(' ', '')
     
     if not supabase:
@@ -328,9 +349,7 @@ if st.session_state.sku_search:
     else:
         with st.spinner("Buscando en catálogo..."):
             try:
-                # 1. Búsqueda Exacta
                 res = supabase.table('catalogo_toyota').select("*").eq('sku_search', sku_limpio).execute()
-                # 2. Búsqueda Flexible
                 if not res.data:
                     res = supabase.table('catalogo_toyota').select("*").ilike('item', f"%{sku_limpio}%").limit(1).execute()
                 
@@ -339,17 +358,20 @@ if st.session_state.sku_search:
                 producto = None
 
             if producto:
-                # Datos del producto
+                # Contenedor con animación
+                st.markdown("<div class='resultado-container'>", unsafe_allow_html=True)
+                
                 sku_real = producto.get('item')
                 img_url = producto.get('img_url')
                 
-                # AUTO-OPTIMIZACIÓN: Si no hay imagen, buscarla y guardarla
                 if not img_url:
                     img_web = buscar_imagen_web(sku_real)
                     if img_web:
                         img_url = img_web
                         try:
                             supabase.table('catalogo_toyota').update({'img_url': img_web}).eq('item', sku_real).execute()
+                            # NOTIFICACIÓN TOAST
+                            st.toast("✨ Nueva imagen indexada al catálogo local", icon="🤖")
                         except Exception:
                             pass
                 
@@ -361,7 +383,6 @@ if st.session_state.sku_search:
                 except Exception: 
                     precio = 0
 
-                # MOSTRAR FICHA
                 st.markdown("---")
                 c_img, c_det = st.columns([1, 1.3])
                 
@@ -385,7 +406,6 @@ if st.session_state.sku_search:
                     else:
                         st.warning("Precio no disponible.")
 
-                # CALCULADORA
                 if precio > 0:
                     st.markdown("---")
                     c_q, c_t = st.columns([1, 2])
@@ -399,30 +419,16 @@ if st.session_state.sku_search:
                                 <span style="font-size: 1.8rem; font-weight: 900;">${total:,.2f}</span>
                             </div>
                         """, unsafe_allow_html=True)
+                
+                # Cerramos el div de la animación
+                st.markdown("</div>", unsafe_allow_html=True)
 
             else:
                 st.error(f"❌ El código '{st.session_state.sku_search}' no se encuentra en el catálogo.")
 
-# --- 8. FOOTER LEGAL (CUMPLIMIENTO PROFECO / LFPC) ---
+# --- 8. FOOTER LEGAL ---
 st.markdown("---")
 st.markdown(f"""
-    <style>
-        .legal-footer {{
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 11px;
-            color: var(--text-color); 
-            opacity: 0.8;
-            text-align: justify;
-            line-height: 1.5;
-            padding-top: 20px;
-            margin-top: 10px;
-        }}
-        .legal-footer strong {{
-            font-weight: 700;
-            text-transform: uppercase;
-        }}
-    </style>
-
     <div class="legal-footer">
         <strong>MARCO LEGAL Y PROTECCIÓN AL CONSUMIDOR</strong><br>
         La información presentada en este cotizador digital cumple con las disposiciones de la <strong>Ley Federal de Protección al Consumidor (LFPC)</strong> y las Normas Oficiales Mexicanas vigentes:
