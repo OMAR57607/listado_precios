@@ -153,6 +153,23 @@ def apply_dynamic_styles():
         h1, h2, h3, h4, p, span, div, label {{
             color: var(--main-text) !important;
         }}
+
+        /* --- CORRECCIÓN PARA AVISOS (TOAST Y SPINNER) --- */
+        /* Fuerza el fondo y color correcto para modo día/noche en PC y Smartphone */
+        div[data-testid="stToast"] {{
+            background-color: var(--card-bg) !important;
+            border: 2px solid var(--accent) !important;
+            border-radius: 10px !important;
+            box-shadow: var(--shadow) !important;
+        }}
+        div[data-testid="stToast"] div, 
+        div[data-testid="stToast"] span, 
+        div[data-testid="stToast"] p,
+        div[data-testid="stSpinner"] div, 
+        div[data-testid="stSpinner"] p, 
+        div[data-testid="stSpinner"] span {{
+            color: var(--main-text) !important;
+        }}
         
         /* --- INPUTS --- */
         .stTextInput input {{
@@ -228,6 +245,7 @@ def apply_dynamic_styles():
         }}
         </style>
     """, unsafe_allow_html=True)
+
 
 apply_dynamic_styles()
 
